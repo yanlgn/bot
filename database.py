@@ -144,7 +144,13 @@ def get_shop_item(shop_id, item_id):
     conn.close()
     return result
 
-def decrement_item_stock(shop_id, item_id):
+def decrement_item_stock(shop_id, item_id, quantity):
+    """
+    Décrémente le stock d'un item de la quantité spécifiée.
+    :param shop_id: ID du shop
+    :param item_id: ID de l'item
+    :param quantity: Quantité à décrémenter
+    """
     try:
         conn = connect_db()
         cursor = conn.cursor()
@@ -155,16 +161,16 @@ def decrement_item_stock(shop_id, item_id):
         
         if current_stock:
             print(f"Stock actuel pour shop_id={shop_id}, item_id={item_id} : {current_stock[0]}")  # Log
-            if current_stock[0] > 0:
+            if current_stock[0] >= quantity:  # Vérifier si le stock est suffisant
                 cursor.execute("""
                     UPDATE items
-                    SET stock = stock - 1
-                    WHERE shop_id = %s AND item_id = %s AND stock > 0
-                """, (shop_id, item_id))
+                    SET stock = stock - %s
+                    WHERE shop_id = %s AND item_id = %s AND stock >= %s
+                """, (quantity, shop_id, item_id, quantity))
                 conn.commit()
-                print("Stock décrémenté avec succès")  # Log
+                print(f"Stock décrémenté de {quantity} avec succès")  # Log
             else:
-                print("Le stock est déjà à 0 ou inférieur, aucune décrémentation effectuée.")  # Log
+                print("Stock insuffisant, aucune décrémentation effectuée.")  # Log
         else:
             print(f"Aucun item trouvé avec shop_id={shop_id}, item_id={item_id}")  # Log
         
@@ -173,7 +179,6 @@ def decrement_item_stock(shop_id, item_id):
     finally:
         if conn:
             conn.close()
-
 def get_all_items():
     conn = connect_db()
     cursor = conn.cursor()
