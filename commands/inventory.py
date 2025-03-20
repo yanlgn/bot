@@ -50,3 +50,4 @@ async def inventaire(self, ctx):
 
 async def setup(bot):
     await bot.add_cog(Inventory(bot))
+
