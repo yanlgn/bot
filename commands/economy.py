@@ -6,14 +6,17 @@ class Economy(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
-    @commands.command()
+    @commands.command(name="balance")
     async def balance(self, ctx, member: discord.Member = None):
-        """Affiche ton solde ou celui d'un autre utilisateur."""
-        user = member or ctx.author
-        balance = database.get_balance(user.id)
-        embed = discord.Embed(title=f"💰 Solde de {user.display_name}", color=discord.Color.green())
-        embed.add_field(name="Portefeuille", value=f"{balance['wallet']} pièces", inline=False)
-        embed.add_field(name="Banque", value=f"{balance['bank']} pièces", inline=False)
+        """Affiche le solde d'un utilisateur."""
+        member = member or ctx.author
+        balance = database.get_balance(member.id)
+        deposit = database.get_deposit(member.id)
+
+        embed = discord.Embed(title=f"Solde de {member.display_name}", color=discord.Color.gold())
+        embed.add_field(name="💰 Argent en poche", value=f"{balance} coins", inline=False)
+        embed.add_field(name="🏦 En banque", value=f"{deposit} coins", inline=False)
+        embed.set_thumbnail(url=member.avatar.url if member.avatar else discord.Embed.Empty)
         await ctx.send(embed=embed)
 
     @commands.command()
