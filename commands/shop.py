@@ -99,6 +99,42 @@ class Shop(commands.Cog):
             await ctx.send(embed=discord.Embed(title="❌ Erreur", description="L'item n'a pas pu être supprimé.", color=discord.Color.red()))
 
     @commands.command()
+    async def acheter(self, ctx, shop_id: int, item_name: str, quantity: int = 1):
+        """Acheter un item par son nom."""
+        # Récupérer l'item par son nom
+        item = database.get_item_by_name(item_name)
+        if not item:
+            await ctx.send(embed=discord.Embed(title="❌ Item introuvable", description=f"Aucun item nommé **{item_name}**.", color=discord.Color.red()))
+            return
+
+        item_id, name, price, description, stock, active = item[0], item[1], item[2], item[3], item[5], item[6]
+
+        # Vérifier si l'item est actif
+        if active != 1:
+            await ctx.send(embed=discord.Embed(title="❌ Item inactif", description=f"L'item **{name}** n'est pas disponible à l'achat.", color=discord.Color.red()))
+            return
+
+        # Vérifier si le stock est suffisant
+        if stock != -1 and stock < quantity:
+            await ctx.send(embed=discord.Embed(title="❌ Stock insuffisant", description=f"Il ne reste que {stock} unités de **{name}**.", color=discord.Color.red()))
+            return
+
+        # Vérifier si l'utilisateur a assez d'argent
+        total_cost = price * quantity
+        user_balance = database.get_balance(ctx.author.id)
+        if user_balance < total_cost:
+            await ctx.send(embed=discord.Embed(title="❌ Solde insuffisant", description=f"Tu n'as pas assez d'argent pour acheter {quantity}x **{name}**.", color=discord.Color.red()))
+            return
+
+        # Effectuer l'achat
+        database.update_balance(ctx.author.id, -total_cost)
+        database.add_user_item(ctx.author.id, shop_id, item_id, quantity)
+
+        # Décrémenter le stock si nécessaire
+        if stock != -1:
+            database.decrement_item_stock(shop_id, item_id)
+
+        await ctx.send(embed=discord.Embed(title="✅ Achat réussi", description=f"{ctx.author.mention} a acheté {quantity}x **{name}** pour **{total_cost}** pièces.", color=discord.Color.green()))
 
     @commands.command()
     async def vendre(self, ctx, shop_id: int, item_name: str, quantity: int = 1):
