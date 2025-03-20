@@ -125,18 +125,27 @@ async def acheter(self, ctx, shop_id: int, item_id: int, quantity: int = 1):
 
     await ctx.send(embed=discord.Embed(title="✅ Achat réussi", description=f"{ctx.author.mention} a acheté {quantity}x **{item_name}** pour **{total_cost}** pièces.", color=discord.Color.green()))
     @commands.command()
-    async def vendre(self, ctx, shop_id: int, item_id: int):
-        """Vendre un item (80% du prix)."""
-        item = database.get_shop_item(shop_id, item_id)
-        if not item:
-            await ctx.send(embed=discord.Embed(title="❌ Item introuvable", description="Cet item n'existe pas ou est inactif.", color=discord.Color.red()))
-            return
+@commands.command()
+async def vendre(self, ctx, shop_id: int, item_id: int, quantity: int = 1):
+    """Vendre un item (80% du prix)."""
+    item = database.get_shop_item(shop_id, item_id)
+    if not item:
+        await ctx.send(embed=discord.Embed(title="❌ Item introuvable", description="Cet item n'existe pas ou est inactif.", color=discord.Color.red()))
+        return
 
-        item_name, price = item[1], int(item[2] * 0.8)
-        database.remove_user_item(ctx.author.id, shop_id, item_id)
-        database.update_balance(ctx.author.id, price)
-        await ctx.send(embed=discord.Embed(title="💰 Vente réussie", description=f"{ctx.author.mention} a vendu **{item_name}** pour **{price}** pièces.", color=discord.Color.blue()))
+    item_name, price = item[1], int(item[2] * 0.8)
+    total_earned = price * quantity
 
+    # Vérifie si l'utilisateur possède l'item en quantité suffisante
+    inventory = database.get_user_inventory(ctx.author.id)
+    user_has_item = any(i[0] == item_name and i[1] >= quantity for i in inventory)
+    if not user_has_item:
+        await ctx.send(embed=discord.Embed(title="❌ Quantité insuffisante", description=f"Tu ne possèdes pas {quantity}x **{item_name}**.", color=discord.Color.red()))
+        return
+
+    database.remove_user_item(ctx.author.id, shop_id, item_id, quantity)
+    database.update_balance(ctx.author.id, total_earned)
+    await ctx.send(embed=discord.Embed(title="💰 Vente réussie", description=f"{ctx.author.mention} a vendu {quantity}x **{item_name}** pour **{total_earned}** pièces.", color=discord.Color.blue()))
     @commands.command()
     async def items_list(self, ctx):
         """[Admin uniquement] Liste complète de tous les items existants, actifs et inactifs."""
