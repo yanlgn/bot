@@ -158,7 +158,13 @@ def get_all_items():
     conn.close()
     return result
 
-
+def get_item_by_name(name):
+    conn = connect_db()
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM items WHERE name = ? ORDER BY active DESC LIMIT 1", (name,))
+    result = cursor.fetchone()
+    conn.close()
+    return result
 
 def get_item_by_id(item_id):
     conn = connect_db()
