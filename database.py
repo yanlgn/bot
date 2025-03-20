@@ -239,7 +239,7 @@ def get_user_inventory(user_id):
     conn = connect_db()
     cursor = conn.cursor()
     cursor.execute("""
-        SELECT ui.shop_id, ui.item_id, i.name, i.price, i.description, ui.quantity, s.name as shop_name
+        SELECT i.name, ui.quantity, s.name as shop_name
         FROM user_items ui
         JOIN items i ON ui.item_id = i.item_id AND ui.shop_id = i.shop_id
         JOIN shops s ON ui.shop_id = s.shop_id
