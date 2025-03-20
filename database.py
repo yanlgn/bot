@@ -164,9 +164,16 @@ def get_all_items():
     return result
 
 def get_item_by_name(name):
+    """Récupère un item par son nom."""
     conn = connect_db()
     cursor = conn.cursor()
-    cursor.execute("SELECT * FROM items WHERE name = %s ORDER BY active DESC LIMIT 1", (name,))
+    cursor.execute("""
+        SELECT item_id, name, price, description, stock, active
+        FROM items
+        WHERE name = %s AND active = 1
+        ORDER BY item_id
+        LIMIT 1
+    """, (name,))
     result = cursor.fetchone()
     conn.close()
     return result
