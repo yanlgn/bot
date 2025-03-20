@@ -99,44 +99,6 @@ class Shop(commands.Cog):
             await ctx.send(embed=discord.Embed(title="❌ Erreur", description="L'item n'a pas pu être supprimé.", color=discord.Color.red()))
 
     @commands.command()
-    async def acheter(self, ctx, shop_id: int, item_name: str, quantity: int = 1):
-        """Acheter un item par son nom (vérifie le stock)."""
-        # Récupérer l'item par son nom
-        item = database.get_item_by_name(item_name)
-        if not item:
-            await ctx.send(embed=discord.Embed(title="❌ Item introuvable", description=f"Aucun item nommé **{item_name}**.", color=discord.Color.red()))
-            return
-
-        item_id, name, price, stock = item[0], item[1], item[2], item[4]
-
-        # Convertir le stock en entier (si ce n'est pas déjà le cas)
-        try:
-            stock = int(stock)  # Convertir le stock en entier
-        except (ValueError, TypeError):
-            await ctx.send(embed=discord.Embed(title="❌ Erreur", description="Le stock de l'item est invalide.", color=discord.Color.red()))
-            return
-
-        # Vérifier si le stock est suffisant (sauf si le stock est illimité)
-        if stock != -1 and stock < quantity:
-            await ctx.send(embed=discord.Embed(title="❌ Rupture de stock", description=f"Stock insuffisant pour **{name}**.", color=discord.Color.red()))
-            return
-
-        # Vérifier si l'utilisateur a assez d'argent
-        total_cost = price * quantity
-        user_balance = database.get_balance(ctx.author.id)
-        if user_balance < total_cost:
-            await ctx.send(embed=discord.Embed(title="❌ Solde insuffisant", description="Tu n'as pas assez d'argent.", color=discord.Color.red()))
-            return
-
-        # Effectuer l'achat
-        database.update_balance(ctx.author.id, -total_cost)
-        database.add_user_item(ctx.author.id, shop_id, item_id, quantity)
-
-        # Décrémenter le stock si nécessaire (sauf si le stock est illimité)
-        if stock != -1:
-            database.decrement_item_stock(shop_id, item_id, quantity)
-
-        await ctx.send(embed=discord.Embed(title="✅ Achat réussi", description=f"{ctx.author.mention} a acheté {quantity}x **{name}** pour **{total_cost}** pièces.", color=discord.Color.green()))
 
     @commands.command()
     async def vendre(self, ctx, shop_id: int, item_name: str, quantity: int = 1):
