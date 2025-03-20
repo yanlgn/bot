@@ -7,19 +7,20 @@ class Inventory(commands.Cog):
         self.bot = bot
 
     @commands.command()
-    async def inventaire(self, ctx):
-        """Affiche l'inventaire de l'utilisateur."""
-        inventory = database.get_user_inventory(ctx.author.id)
-        if not inventory:
-            embed = discord.Embed(title="📦 Inventaire", description="Ton inventaire est vide.", color=discord.Color.orange())
-            await ctx.send(embed=embed)
-            return
-
-        embed = discord.Embed(title=f"📦 Inventaire de {ctx.author.name}", color=discord.Color.gold())
-        for item_name, quantity, shop_name in inventory:
-            embed.add_field(name=item_name, value=f"Quantité : {quantity} (Shop: {shop_name})", inline=False)
-
+@commands.command()
+async def inventaire(self, ctx):
+    """Affiche l'inventaire de l'utilisateur."""
+    inventory = database.get_user_inventory(ctx.author.id)
+    if not inventory:
+        embed = discord.Embed(title="📦 Inventaire", description="Ton inventaire est vide.", color=discord.Color.orange())
         await ctx.send(embed=embed)
+        return
+
+    embed = discord.Embed(title=f"📦 Inventaire de {ctx.author.name}", color=discord.Color.gold())
+    for item_name, quantity, shop_name in inventory:
+        embed.add_field(name=item_name, value=f"Quantité : {quantity} (Shop: {shop_name})", inline=False)
+
+    await ctx.send(embed=embed)
 
     @commands.command()
     @commands.has_permissions(administrator=True)
