@@ -17,7 +17,7 @@ def create_tables():
     )
     """)
 
-    # Table items avec description
+    # Table items avec description et stock
     cursor.execute("""
     CREATE TABLE IF NOT EXISTS items (
         item_id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -25,6 +25,7 @@ def create_tables():
         name TEXT NOT NULL,
         price INTEGER NOT NULL,
         description TEXT DEFAULT '',
+        stock INTEGER DEFAULT -1,
         FOREIGN KEY (shop_id) REFERENCES shops(shop_id)
     )
     """)
@@ -91,7 +92,7 @@ def get_shops():
 def get_shop_items(shop_id):
     conn = connect_db()
     cursor = conn.cursor()
-    cursor.execute("SELECT item_id, name, price, description FROM items WHERE shop_id = ?", (shop_id,))
+    cursor.execute("SELECT item_id, name, price, description, stock FROM items WHERE shop_id = ?", (shop_id,))
     result = cursor.fetchall()
     conn.close()
     return result
@@ -113,10 +114,10 @@ def delete_shop(shop_id):
     conn.commit()
     conn.close()
 
-def add_item_to_shop(shop_id, name, price, description=""):
+def add_item_to_shop(shop_id, name, price, description="", stock=-1):
     conn = connect_db()
     cursor = conn.cursor()
-    cursor.execute("INSERT INTO items (shop_id, name, price, description) VALUES (?, ?, ?, ?)", (shop_id, name, price, description))
+    cursor.execute("INSERT INTO items (shop_id, name, price, description, stock) VALUES (?, ?, ?, ?, ?)", (shop_id, name, price, description, stock))
     conn.commit()
     item_id = cursor.lastrowid
     conn.close()
@@ -132,10 +133,21 @@ def remove_item_from_shop(shop_id, item_id):
 def get_shop_item(shop_id, item_id):
     conn = connect_db()
     cursor = conn.cursor()
-    cursor.execute("SELECT item_id, name, price, description FROM items WHERE shop_id = ? AND item_id = ?", (shop_id, item_id))
+    cursor.execute("SELECT item_id, name, price, description, stock FROM items WHERE shop_id = ? AND item_id = ?", (shop_id, item_id))
     result = cursor.fetchone()
     conn.close()
     return result
+
+def decrement_item_stock(shop_id, item_id):
+    conn = connect_db()
+    cursor = conn.cursor()
+    cursor.execute("""
+        UPDATE items
+        SET stock = stock - 1
+        WHERE shop_id = ? AND item_id = ? AND stock > 0
+    """, (shop_id, item_id))
+    conn.commit()
+    conn.close()
 
 # Gestion des utilisateurs et balances
 def get_balance(user_id):
