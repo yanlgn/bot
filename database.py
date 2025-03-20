@@ -314,6 +314,19 @@ def get_salary_cooldown(user_id, role_ids):
     remaining = cooldown - (now - last_collect)
     conn.close()
     return remaining if remaining > 0 else 0
+def get_item_by_name(item_name):
+    conn = connect_db()
+    cursor = conn.cursor()
+    cursor.execute("""
+        SELECT shop_id, item_id
+        FROM items
+        WHERE name = ?
+        LIMIT 1
+    """, (item_name,))
+    result = cursor.fetchone()
+    conn.close()
+    return result  # (shop_id, item_id) ou None
+
 
 # Créer les tables si elles n'existent pas
 create_tables()
