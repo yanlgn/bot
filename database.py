@@ -26,6 +26,7 @@ def create_tables():
         price INTEGER NOT NULL,
         description TEXT DEFAULT '',
         stock INTEGER DEFAULT -1,
+        active INTEGER DEFAULT 1,
         FOREIGN KEY (shop_id) REFERENCES shops(shop_id)
     )
     """)
@@ -89,14 +90,6 @@ def get_shops():
     conn.close()
     return result
 
-def get_shop_items(shop_id):
-    conn = connect_db()
-    cursor = conn.cursor()
-    cursor.execute("SELECT item_id, name, price, description, stock FROM items WHERE shop_id = ?", (shop_id,))
-    result = cursor.fetchall()
-    conn.close()
-    return result
-
 def create_shop(name, description=""):
     conn = connect_db()
     cursor = conn.cursor()
@@ -117,23 +110,31 @@ def delete_shop(shop_id):
 def add_item_to_shop(shop_id, name, price, description="", stock=-1):
     conn = connect_db()
     cursor = conn.cursor()
-    cursor.execute("INSERT INTO items (shop_id, name, price, description, stock) VALUES (?, ?, ?, ?, ?)", (shop_id, name, price, description, stock))
+    cursor.execute("INSERT INTO items (shop_id, name, price, description, stock, active) VALUES (?, ?, ?, ?, ?, 1)", (shop_id, name, price, description, stock))
     conn.commit()
     item_id = cursor.lastrowid
     conn.close()
     return item_id
 
-def remove_item_from_shop(shop_id, item_id):
+def remove_item(item_id):
     conn = connect_db()
     cursor = conn.cursor()
-    cursor.execute("DELETE FROM items WHERE shop_id = ? AND item_id = ?", (shop_id, item_id))
+    cursor.execute("UPDATE items SET active = 0 WHERE item_id = ?", (item_id,))
     conn.commit()
     conn.close()
+
+def get_shop_items(shop_id):
+    conn = connect_db()
+    cursor = conn.cursor()
+    cursor.execute("SELECT item_id, name, price, description, stock FROM items WHERE shop_id = ? AND active = 1", (shop_id,))
+    result = cursor.fetchall()
+    conn.close()
+    return result
 
 def get_shop_item(shop_id, item_id):
     conn = connect_db()
     cursor = conn.cursor()
-    cursor.execute("SELECT item_id, name, price, description, stock FROM items WHERE shop_id = ? AND item_id = ?", (shop_id, item_id))
+    cursor.execute("SELECT item_id, name, price, description, stock FROM items WHERE shop_id = ? AND item_id = ? AND active = 1", (shop_id, item_id))
     result = cursor.fetchone()
     conn.close()
     return result
@@ -146,6 +147,40 @@ def decrement_item_stock(shop_id, item_id):
         SET stock = stock - 1
         WHERE shop_id = ? AND item_id = ? AND stock > 0
     """, (shop_id, item_id))
+    conn.commit()
+    conn.close()
+
+def get_all_items():
+    conn = connect_db()
+    cursor = conn.cursor()
+    cursor.execute("SELECT item_id, name, price, description, shop_id, stock, active FROM items")
+    result = cursor.fetchall()
+    conn.close()
+    return result
+
+def get_item_by_name(name):
+    conn = connect_db()
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM items WHERE name = ? ORDER BY active DESC LIMIT 1", (name,))
+    result = cursor.fetchone()
+    conn.close()
+    return result
+
+def get_item_by_id(item_id):
+    conn = connect_db()
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM items WHERE item_id = ?", (item_id,))
+    result = cursor.fetchone()
+    conn.close()
+    return result
+
+def reactivate_item(item_id, stock=None):
+    conn = connect_db()
+    cursor = conn.cursor()
+    if stock is not None:
+        cursor.execute("UPDATE items SET active = 1, stock = ? WHERE item_id = ?", (stock, item_id))
+    else:
+        cursor.execute("UPDATE items SET active = 1 WHERE item_id = ?", (item_id,))
     conn.commit()
     conn.close()
 
