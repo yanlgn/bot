@@ -145,15 +145,34 @@ def get_shop_item(shop_id, item_id):
     return result
 
 def decrement_item_stock(shop_id, item_id):
-    conn = connect_db()
-    cursor = conn.cursor()
-    cursor.execute("""
-        UPDATE items
-        SET stock = stock - 1
-        WHERE shop_id = %s AND item_id = %s AND stock > 0
-    """, (shop_id, item_id))
-    conn.commit()
-    conn.close()
+    try:
+        conn = connect_db()
+        cursor = conn.cursor()
+        
+        # Vérifier le stock actuel avant la décrémentation
+        cursor.execute("SELECT stock FROM items WHERE shop_id = %s AND item_id = %s", (shop_id, item_id))
+        current_stock = cursor.fetchone()
+        
+        if current_stock:
+            print(f"Stock actuel pour shop_id={shop_id}, item_id={item_id} : {current_stock[0]}")  # Log
+            if current_stock[0] > 0:
+                cursor.execute("""
+                    UPDATE items
+                    SET stock = stock - 1
+                    WHERE shop_id = %s AND item_id = %s AND stock > 0
+                """, (shop_id, item_id))
+                conn.commit()
+                print("Stock décrémenté avec succès")  # Log
+            else:
+                print("Le stock est déjà à 0 ou inférieur, aucune décrémentation effectuée.")  # Log
+        else:
+            print(f"Aucun item trouvé avec shop_id={shop_id}, item_id={item_id}")  # Log
+        
+    except Exception as e:
+        print(f"Erreur lors de la décrémentation du stock : {e}")  # Log
+    finally:
+        if conn:
+            conn.close()
 
 def get_all_items():
     conn = connect_db()
