@@ -98,32 +98,32 @@ class Shop(commands.Cog):
         else:
             await ctx.send(embed=discord.Embed(title="❌ Erreur", description="L'item n'a pas pu être supprimé.", color=discord.Color.red()))
 
-    @commands.command()
-    async def acheter(self, ctx, shop_id: int, item_id: int):
-        """Acheter un item (vérifie le stock)."""
-        item = database.get_shop_item(shop_id, item_id)
-        if not item:
-            await ctx.send(embed=discord.Embed(title="❌ Item introuvable", description="Cet item n'existe pas ou est inactif.", color=discord.Color.red()))
-            return
+@commands.command()
+async def acheter(self, ctx, shop_id: int, item_id: int, quantity: int = 1):
+    """Acheter un item (vérifie le stock)."""
+    item = database.get_shop_item(shop_id, item_id)
+    if not item:
+        await ctx.send(embed=discord.Embed(title="❌ Item introuvable", description="Cet item n'existe pas ou est inactif.", color=discord.Color.red()))
+        return
 
-        item_name, price, stock = item[1], item[2], item[4]
-        if stock == 0:
-            await ctx.send(embed=discord.Embed(title="❌ Rupture de stock", description=f"L'item **{item_name}** est en rupture de stock.", color=discord.Color.red()))
-            return
+    item_name, price, stock = item[1], item[2], item[4]
+    if stock != -1 and stock < quantity:  # Vérifie si le stock est suffisant
+        await ctx.send(embed=discord.Embed(title="❌ Rupture de stock", description=f"Stock insuffisant pour **{item_name}**.", color=discord.Color.red()))
+        return
 
-        user_balance = database.get_balance(ctx.author.id)
-        if user_balance < price:
-            await ctx.send(embed=discord.Embed(title="❌ Solde insuffisant", description="Tu n'as pas assez d'argent.", color=discord.Color.red()))
-            return
+    total_cost = price * quantity
+    user_balance = database.get_balance(ctx.author.id)
+    if user_balance < total_cost:
+        await ctx.send(embed=discord.Embed(title="❌ Solde insuffisant", description="Tu n'as pas assez d'argent.", color=discord.Color.red()))
+        return
 
-        database.update_balance(ctx.author.id, -price)
-        database.add_user_item(ctx.author.id, shop_id, item_id)
+    database.update_balance(ctx.author.id, -total_cost)
+    database.add_user_item(ctx.author.id, shop_id, item_id, quantity)
 
-        if stock > 0:
-            database.decrement_item_stock(shop_id, item_id)
+    if stock != -1:  # Si le stock n'est pas illimité, on le décrémente
+        database.decrement_item_stock(shop_id, item_id, quantity)
 
-        await ctx.send(embed=discord.Embed(title="✅ Achat réussi", description=f"{ctx.author.mention} a acheté **{item_name}** pour **{price}** pièces.", color=discord.Color.green()))
-
+    await ctx.send(embed=discord.Embed(title="✅ Achat réussi", description=f"{ctx.author.mention} a acheté {quantity}x **{item_name}** pour **{total_cost}** pièces.", color=discord.Color.green()))
     @commands.command()
     async def vendre(self, ctx, shop_id: int, item_id: int):
         """Vendre un item (80% du prix)."""
