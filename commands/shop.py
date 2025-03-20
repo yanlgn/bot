@@ -99,12 +99,11 @@ class Shop(commands.Cog):
             await ctx.send(embed=discord.Embed(title="❌ Erreur", description="L'item n'a pas pu être supprimé.", color=discord.Color.red()))
 
     @commands.command()
-    @commands.command()
     async def acheter(self, ctx, shop_id: int, item_name: str, quantity: int = 1):
         """Acheter un item par son nom."""
         # Récupérer l'item par son nom
         item = database.get_item_by_name(item_name)
-    
+        
         # Vérifier si l'item existe
         if not item:
             await ctx.send(embed=discord.Embed(
@@ -159,7 +158,7 @@ class Shop(commands.Cog):
             # Décrémenter le stock si nécessaire
             if stock != -1:
                 print(f"Décrémentation du stock pour shop_id={shop_id}, item_id={item_id}, quantité={quantity}")  # Log
-                database.decrement_item_stock(shop_id, item_id, quantity)  # Passer la quantité ici
+                database.decrement_item_stock(shop_id, item_id, quantity)  # Décrémenter de la quantité totale
 
             # Envoyer un message de confirmation
             await ctx.send(embed=discord.Embed(
@@ -175,6 +174,7 @@ class Shop(commands.Cog):
                 color=discord.Color.red()
             ))
             print(f"Erreur lors de l'achat : {e}")
+
     @commands.command()
     async def vendre(self, ctx, shop_id: int, item_name: str, quantity: int = 1):
         """Vendre un item par son nom (80% du prix)."""
