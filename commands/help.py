@@ -24,26 +24,26 @@ class HelpDropdown(discord.ui.Select):
         elif category == "Inventaire":
             embed = discord.Embed(title="📦 Commandes Inventaire", color=discord.Color.orange())
             embed.add_field(name="!inventaire", value="Affiche ton inventaire.", inline=False)
-            embed.add_field(name="!additem <@membre> <item_name> <quantité>", value="Ajoute un item à l'inventaire d'un utilisateur.", inline=False)
-            embed.add_field(name="!removeitem <@membre> <item_name> <quantité>", value="Retire un item de l'inventaire d'un utilisateur.", inline=False)
+            embed.add_field(name="!additem <@membre> <nom_item> <quantité>", value="Ajoute un item à l'inventaire d'un utilisateur.", inline=False)
+            embed.add_field(name="!removeitem <@membre> <nom_item> <quantité>", value="Retire un item de l'inventaire d'un utilisateur.", inline=False)
 
         elif category == "Boutique":
             embed = discord.Embed(title="🛒 Commandes Boutique", color=discord.Color.blue())
             embed.add_field(name="!shops", value="Affiche la liste des shops.", inline=False)
             embed.add_field(name="!shop <shop_id>", value="Affiche les items d'un shop spécifique.", inline=False)
-            embed.add_field(name="!acheter <shop_id> <item_id>", value="Achète un item dans un shop.", inline=False)
-            embed.add_field(name="!vendre <shop_id> <item_id>", value="Vend un item pour 80% de son prix.", inline=False)
-            embed.add_field(name="!item_info <nom>", value="Affiche les informations détaillées d'un item par son nom.", inline=False)
+            embed.add_field(name="!acheter <shop_id> <nom_item> <quantité>", value="Achète un item par son nom.", inline=False)
+            embed.add_field(name="!vendre <shop_id> <nom_item> <quantité>", value="Vend un item par son nom.", inline=False)
+            embed.add_field(name="!item_info <nom_item>", value="Affiche les informations détaillées d'un item.", inline=False)
+            embed.add_field(name="!items_list", value="Affiche la liste complète de tous les items (admin uniquement).", inline=False)
 
         elif category == "Admin":
             embed = discord.Embed(title="🛡️ Commandes Admin", color=discord.Color.red())
-            embed.add_field(name="!setbalance <@membre> <montant>", value="Change le solde d'un utilisateur.", inline=False)
             embed.add_field(name="!create_shop <nom> <description>", value="Crée un nouveau shop.", inline=False)
             embed.add_field(name="!delete_shop <shop_id>", value="Supprime un shop.", inline=False)
             embed.add_field(name="!add_item <shop_id> <nom> <prix> <stock> <description>", value="Ajoute un item à un shop.", inline=False)
             embed.add_field(name="!remove_item <item_id>", value="Supprime un item d'un shop.", inline=False)
             embed.add_field(name="!reactivate_item <item_id> <stock>", value="Réactive un item inactif.", inline=False)
-            embed.add_field(name="!items_list", value="Affiche la liste complète de tous les items.", inline=False)
+            embed.add_field(name="!setbalance <@membre> <montant>", value="Change le solde d'un utilisateur.", inline=False)
 
         await interaction.response.edit_message(embed=embed, view=None)
 
