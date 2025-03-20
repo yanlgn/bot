@@ -1,4 +1,5 @@
 import sqlite3
+import time
 
 def connect_db():
     return sqlite3.connect('shop_and_salary_database.db')
@@ -7,7 +8,7 @@ def create_tables():
     connection = connect_db()
     cursor = connection.cursor()
 
-    # Shops et Items
+    # Table shops
     cursor.execute("""
     CREATE TABLE IF NOT EXISTS shops (
         shop_id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -15,6 +16,7 @@ def create_tables():
     )
     """)
 
+    # Table items
     cursor.execute("""
     CREATE TABLE IF NOT EXISTS items (
         item_id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -25,7 +27,7 @@ def create_tables():
     )
     """)
 
-    # Utilisateurs
+    # Table utilisateurs (balance)
     cursor.execute("""
     CREATE TABLE IF NOT EXISTS users (
         user_id INTEGER PRIMARY KEY,
@@ -33,6 +35,7 @@ def create_tables():
     )
     """)
 
+    # Table user_items (objets possédés)
     cursor.execute("""
     CREATE TABLE IF NOT EXISTS user_items (
         user_id INTEGER,
@@ -44,7 +47,7 @@ def create_tables():
     )
     """)
 
-    # Dépôt bancaire
+    # Table bank_deposit (dépôts bancaires)
     cursor.execute("""
     CREATE TABLE IF NOT EXISTS bank_deposit (
         user_id INTEGER PRIMARY KEY,
@@ -52,7 +55,7 @@ def create_tables():
     )
     """)
 
-    # Salaires des rôles avec cooldown
+    # Table salaires des rôles
     cursor.execute("""
     CREATE TABLE IF NOT EXISTS role_salaries (
         role_id INTEGER PRIMARY KEY,
@@ -61,7 +64,7 @@ def create_tables():
     )
     """)
 
-    # Cooldown de salaire par utilisateur
+    # Table cooldown des salaires pour chaque utilisateur
     cursor.execute("""
     CREATE TABLE IF NOT EXISTS salary_cooldowns (
         user_id INTEGER PRIMARY KEY,
@@ -72,172 +75,166 @@ def create_tables():
     connection.commit()
     connection.close()
 
-create_tables()
-
-# Gestion shops/items (inchangée)
+# Gestion shops et items
 def get_shops():
-    connection = connect_db()
-    cursor = connection.cursor()
+    conn = connect_db()
+    cursor = conn.cursor()
     cursor.execute("SELECT shop_id, name FROM shops")
-    shops = cursor.fetchall()
-    connection.close()
-    return shops
+    result = cursor.fetchall()
+    conn.close()
+    return result
 
 def get_shop_items(shop_id):
-    connection = connect_db()
-    cursor = connection.cursor()
+    conn = connect_db()
+    cursor = conn.cursor()
     cursor.execute("SELECT item_id, name, price FROM items WHERE shop_id = ?", (shop_id,))
-    items = cursor.fetchall()
-    connection.close()
-    return items
+    result = cursor.fetchall()
+    conn.close()
+    return result
 
 def create_shop(name):
-    connection = connect_db()
-    cursor = connection.cursor()
+    conn = connect_db()
+    cursor = conn.cursor()
     cursor.execute("INSERT INTO shops (name) VALUES (?)", (name,))
-    connection.commit()
+    conn.commit()
     shop_id = cursor.lastrowid
-    connection.close()
+    conn.close()
     return shop_id
 
 def delete_shop(shop_id):
-    connection = connect_db()
-    cursor = connection.cursor()
+    conn = connect_db()
+    cursor = conn.cursor()
     cursor.execute("DELETE FROM shops WHERE shop_id = ?", (shop_id,))
-    connection.commit()
-    connection.close()
+    conn.commit()
+    conn.close()
 
 def add_item_to_shop(shop_id, name, price):
-    connection = connect_db()
-    cursor = connection.cursor()
+    conn = connect_db()
+    cursor = conn.cursor()
     cursor.execute("INSERT INTO items (shop_id, name, price) VALUES (?, ?, ?)", (shop_id, name, price))
-    connection.commit()
+    conn.commit()
     item_id = cursor.lastrowid
-    connection.close()
+    conn.close()
     return item_id
 
 def remove_item_from_shop(shop_id, item_id):
-    connection = connect_db()
-    cursor = connection.cursor()
+    conn = connect_db()
+    cursor = conn.cursor()
     cursor.execute("DELETE FROM items WHERE shop_id = ? AND item_id = ?", (shop_id, item_id))
-    connection.commit()
-    connection.close()
-    return cursor.rowcount > 0
+    conn.commit()
+    conn.close()
 
 def get_shop_item(shop_id, item_id):
-    connection = connect_db()
-    cursor = connection.cursor()
+    conn = connect_db()
+    cursor = conn.cursor()
     cursor.execute("SELECT item_id, name, price FROM items WHERE shop_id = ? AND item_id = ?", (shop_id, item_id))
-    item = cursor.fetchone()
-    connection.close()
-    return item
+    result = cursor.fetchone()
+    conn.close()
+    return result
 
-# Gestion utilisateurs
+# Gestion des utilisateurs et balances
 def get_balance(user_id):
-    connection = connect_db()
-    cursor = connection.cursor()
+    conn = connect_db()
+    cursor = conn.cursor()
     cursor.execute("SELECT balance FROM users WHERE user_id = ?", (user_id,))
-    balance = cursor.fetchone()
-    connection.close()
-    return balance[0] if balance else 0
+    result = cursor.fetchone()
+    conn.close()
+    return result[0] if result else 0
 
 def set_balance(user_id, amount):
-    connection = connect_db()
-    cursor = connection.cursor()
+    conn = connect_db()
+    cursor = conn.cursor()
     cursor.execute("INSERT OR REPLACE INTO users (user_id, balance) VALUES (?, ?)", (user_id, amount))
-    connection.commit()
-    connection.close()
+    conn.commit()
+    conn.close()
 
 def update_balance(user_id, amount):
-    connection = connect_db()
-    cursor = connection.cursor()
+    conn = connect_db()
+    cursor = conn.cursor()
     cursor.execute("INSERT OR IGNORE INTO users (user_id, balance) VALUES (?, 0)", (user_id,))
     cursor.execute("UPDATE users SET balance = balance + ? WHERE user_id = ?", (amount, user_id))
-    connection.commit()
-    connection.close()
+    conn.commit()
+    conn.close()
 
 def add_user_item(user_id, shop_id, item_id):
-    connection = connect_db()
-    cursor = connection.cursor()
+    conn = connect_db()
+    cursor = conn.cursor()
     cursor.execute("INSERT INTO user_items (user_id, shop_id, item_id) VALUES (?, ?, ?)", (user_id, shop_id, item_id))
-    connection.commit()
-    connection.close()
+    conn.commit()
+    conn.close()
 
 def remove_user_item(user_id, shop_id, item_id):
-    connection = connect_db()
-    cursor = connection.cursor()
+    conn = connect_db()
+    cursor = conn.cursor()
     cursor.execute("DELETE FROM user_items WHERE user_id = ? AND shop_id = ? AND item_id = ?", (user_id, shop_id, item_id))
-    connection.commit()
-    connection.close()
+    conn.commit()
+    conn.close()
 
-# Gestion dépôts/retraits
+# Dépôts bancaires
 def deposit(user_id, amount):
-    connection = connect_db()
-    cursor = connection.cursor()
+    conn = connect_db()
+    cursor = conn.cursor()
     cursor.execute("INSERT OR IGNORE INTO bank_deposit (user_id, amount) VALUES (?, 0)", (user_id,))
     cursor.execute("UPDATE bank_deposit SET amount = amount + ? WHERE user_id = ?", (amount, user_id))
-    connection.commit()
-    connection.close()
+    conn.commit()
+    conn.close()
 
 def get_deposit(user_id):
-    connection = connect_db()
-    cursor = connection.cursor()
+    conn = connect_db()
+    cursor = conn.cursor()
     cursor.execute("SELECT amount FROM bank_deposit WHERE user_id = ?", (user_id,))
-    deposit = cursor.fetchone()
-    connection.close()
-    return deposit[0] if deposit else 0
+    result = cursor.fetchone()
+    conn.close()
+    return result[0] if result else 0
 
-# Gestion des salaires des rôles avec cooldown
+# Gestion des salaires
 def assign_role_salary(role_id, salary, cooldown=3600):
-    connection = connect_db()
-    cursor = connection.cursor()
+    conn = connect_db()
+    cursor = conn.cursor()
     cursor.execute("INSERT OR REPLACE INTO role_salaries (role_id, salary, cooldown) VALUES (?, ?, ?)", (role_id, salary, cooldown))
-    connection.commit()
-    connection.close()
+    conn.commit()
+    conn.close()
 
 def get_role_salary(role_id):
-    connection = connect_db()
-    cursor = connection.cursor()
+    conn = connect_db()
+    cursor = conn.cursor()
     cursor.execute("SELECT salary FROM role_salaries WHERE role_id = ?", (role_id,))
     result = cursor.fetchone()
-    connection.close()
+    conn.close()
     return result[0] if result else 0
 
 def get_all_roles_salaries():
-    connection = connect_db()
-    cursor = connection.cursor()
+    conn = connect_db()
+    cursor = conn.cursor()
     cursor.execute("SELECT role_id, salary, cooldown FROM role_salaries")
     result = cursor.fetchall()
-    connection.close()
+    conn.close()
     return result
 
-# Cooldown collecte salaire
-import time
-
+# Gestion cooldowns salaire
 def set_salary_cooldown(user_id):
-    connection = connect_db()
-    cursor = connection.cursor()
+    conn = connect_db()
+    cursor = conn.cursor()
     cursor.execute("INSERT OR REPLACE INTO salary_cooldowns (user_id, last_collect) VALUES (?, ?)", (user_id, int(time.time())))
-    connection.commit()
-    connection.close()
+    conn.commit()
+    conn.close()
 
-def get_salary_cooldown(user_id):
-    connection = connect_db()
-    cursor = connection.cursor()
+def get_salary_cooldown(user_id, role_ids):
+    conn = connect_db()
+    cursor = conn.cursor()
     cursor.execute("SELECT last_collect FROM salary_cooldowns WHERE user_id = ?", (user_id,))
     result = cursor.fetchone()
-    if result is None:
+    if not result:
         return 0
-    last_time = result[0]
+    last_collect = result[0]
     now = int(time.time())
-    # Trouver le cooldown applicable à l'utilisateur
-    cursor.execute("""
-        SELECT MIN(cooldown) FROM role_salaries 
-        WHERE role_id IN (
-            SELECT role_id FROM role_salaries
-        )
-    """)  # (optionnel : peut être ajusté pour filtrer par les rôles du membre)
+    # On prend le cooldown le plus petit parmi les rôles du membre
+    placeholders = ','.join('?' for _ in role_ids)
+    cursor.execute(f"SELECT MIN(cooldown) FROM role_salaries WHERE role_id IN ({placeholders})", role_ids)
     cooldown = cursor.fetchone()[0] or 3600
-    remaining = cooldown - (now - last_time)
-    connection.close()
+    remaining = cooldown - (now - last_collect)
+    conn.close()
     return remaining if remaining > 0 else 0
+
+# Créer les tables si elles n'existent pas
+create_tables()
