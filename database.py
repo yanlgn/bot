@@ -8,21 +8,23 @@ def create_tables():
     connection = connect_db()
     cursor = connection.cursor()
 
-    # Table shops
+    # Table shops avec description
     cursor.execute("""
     CREATE TABLE IF NOT EXISTS shops (
         shop_id INTEGER PRIMARY KEY AUTOINCREMENT,
-        name TEXT NOT NULL
+        name TEXT NOT NULL,
+        description TEXT DEFAULT ''
     )
     """)
 
-    # Table items
+    # Table items avec description
     cursor.execute("""
     CREATE TABLE IF NOT EXISTS items (
         item_id INTEGER PRIMARY KEY AUTOINCREMENT,
         shop_id INTEGER,
         name TEXT NOT NULL,
         price INTEGER NOT NULL,
+        description TEXT DEFAULT '',
         FOREIGN KEY (shop_id) REFERENCES shops(shop_id)
     )
     """)
@@ -35,19 +37,21 @@ def create_tables():
     )
     """)
 
-    # Table user_items (objets possédés)
+    # Inventaire avec quantité
     cursor.execute("""
     CREATE TABLE IF NOT EXISTS user_items (
         user_id INTEGER,
         shop_id INTEGER,
         item_id INTEGER,
+        quantity INTEGER DEFAULT 1,
         FOREIGN KEY (user_id) REFERENCES users(user_id),
         FOREIGN KEY (shop_id) REFERENCES shops(shop_id),
-        FOREIGN KEY (item_id) REFERENCES items(item_id)
+        FOREIGN KEY (item_id) REFERENCES items(item_id),
+        PRIMARY KEY (user_id, shop_id, item_id)
     )
     """)
 
-    # Table bank_deposit (dépôts bancaires)
+    # Dépôts bancaires
     cursor.execute("""
     CREATE TABLE IF NOT EXISTS bank_deposit (
         user_id INTEGER PRIMARY KEY,
@@ -55,7 +59,7 @@ def create_tables():
     )
     """)
 
-    # Table salaires des rôles
+    # Salaires des rôles
     cursor.execute("""
     CREATE TABLE IF NOT EXISTS role_salaries (
         role_id INTEGER PRIMARY KEY,
@@ -64,7 +68,7 @@ def create_tables():
     )
     """)
 
-    # Table cooldown des salaires pour chaque utilisateur
+    # Cooldown salaires utilisateurs
     cursor.execute("""
     CREATE TABLE IF NOT EXISTS salary_cooldowns (
         user_id INTEGER PRIMARY KEY,
@@ -79,7 +83,7 @@ def create_tables():
 def get_shops():
     conn = connect_db()
     cursor = conn.cursor()
-    cursor.execute("SELECT shop_id, name FROM shops")
+    cursor.execute("SELECT shop_id, name, description FROM shops")
     result = cursor.fetchall()
     conn.close()
     return result
@@ -87,15 +91,15 @@ def get_shops():
 def get_shop_items(shop_id):
     conn = connect_db()
     cursor = conn.cursor()
-    cursor.execute("SELECT item_id, name, price FROM items WHERE shop_id = ?", (shop_id,))
+    cursor.execute("SELECT item_id, name, price, description FROM items WHERE shop_id = ?", (shop_id,))
     result = cursor.fetchall()
     conn.close()
     return result
 
-def create_shop(name):
+def create_shop(name, description=""):
     conn = connect_db()
     cursor = conn.cursor()
-    cursor.execute("INSERT INTO shops (name) VALUES (?)", (name,))
+    cursor.execute("INSERT INTO shops (name, description) VALUES (?, ?)", (name, description))
     conn.commit()
     shop_id = cursor.lastrowid
     conn.close()
@@ -105,13 +109,14 @@ def delete_shop(shop_id):
     conn = connect_db()
     cursor = conn.cursor()
     cursor.execute("DELETE FROM shops WHERE shop_id = ?", (shop_id,))
+    cursor.execute("DELETE FROM items WHERE shop_id = ?", (shop_id,))
     conn.commit()
     conn.close()
 
-def add_item_to_shop(shop_id, name, price):
+def add_item_to_shop(shop_id, name, price, description=""):
     conn = connect_db()
     cursor = conn.cursor()
-    cursor.execute("INSERT INTO items (shop_id, name, price) VALUES (?, ?, ?)", (shop_id, name, price))
+    cursor.execute("INSERT INTO items (shop_id, name, price, description) VALUES (?, ?, ?, ?)", (shop_id, name, price, description))
     conn.commit()
     item_id = cursor.lastrowid
     conn.close()
@@ -127,7 +132,7 @@ def remove_item_from_shop(shop_id, item_id):
 def get_shop_item(shop_id, item_id):
     conn = connect_db()
     cursor = conn.cursor()
-    cursor.execute("SELECT item_id, name, price FROM items WHERE shop_id = ? AND item_id = ?", (shop_id, item_id))
+    cursor.execute("SELECT item_id, name, price, description FROM items WHERE shop_id = ? AND item_id = ?", (shop_id, item_id))
     result = cursor.fetchone()
     conn.close()
     return result
@@ -156,19 +161,45 @@ def update_balance(user_id, amount):
     conn.commit()
     conn.close()
 
-def add_user_item(user_id, shop_id, item_id):
+# Gestion inventaire avec quantités
+def add_user_item(user_id, shop_id, item_id, quantity=1):
     conn = connect_db()
     cursor = conn.cursor()
-    cursor.execute("INSERT INTO user_items (user_id, shop_id, item_id) VALUES (?, ?, ?)", (user_id, shop_id, item_id))
+    cursor.execute("""
+        INSERT INTO user_items (user_id, shop_id, item_id, quantity)
+        VALUES (?, ?, ?, ?)
+        ON CONFLICT(user_id, shop_id, item_id)
+        DO UPDATE SET quantity = quantity + excluded.quantity
+    """, (user_id, shop_id, item_id, quantity))
     conn.commit()
     conn.close()
 
-def remove_user_item(user_id, shop_id, item_id):
+def remove_user_item(user_id, shop_id, item_id, quantity=1):
     conn = connect_db()
     cursor = conn.cursor()
-    cursor.execute("DELETE FROM user_items WHERE user_id = ? AND shop_id = ? AND item_id = ?", (user_id, shop_id, item_id))
-    conn.commit()
+    cursor.execute("SELECT quantity FROM user_items WHERE user_id = ? AND shop_id = ? AND item_id = ?", (user_id, shop_id, item_id))
+    result = cursor.fetchone()
+    if result:
+        current_quantity = result[0]
+        if current_quantity > quantity:
+            cursor.execute("UPDATE user_items SET quantity = quantity - ? WHERE user_id = ? AND shop_id = ? AND item_id = ?", (quantity, user_id, shop_id, item_id))
+        else:
+            cursor.execute("DELETE FROM user_items WHERE user_id = ? AND shop_id = ? AND item_id = ?", (user_id, shop_id, item_id))
+        conn.commit()
     conn.close()
+
+def get_user_inventory(user_id):
+    conn = connect_db()
+    cursor = conn.cursor()
+    cursor.execute("""
+        SELECT ui.shop_id, ui.item_id, i.name, i.price, i.description, ui.quantity
+        FROM user_items ui
+        JOIN items i ON ui.item_id = i.item_id AND ui.shop_id = i.shop_id
+        WHERE ui.user_id = ?
+    """, (user_id,))
+    result = cursor.fetchall()
+    conn.close()
+    return result
 
 # Dépôts bancaires
 def deposit(user_id, amount):
@@ -228,7 +259,6 @@ def get_salary_cooldown(user_id, role_ids):
         return 0
     last_collect = result[0]
     now = int(time.time())
-    # On prend le cooldown le plus petit parmi les rôles du membre
     placeholders = ','.join('?' for _ in role_ids)
     cursor.execute(f"SELECT MIN(cooldown) FROM role_salaries WHERE role_id IN ({placeholders})", role_ids)
     cooldown = cursor.fetchone()[0] or 3600
