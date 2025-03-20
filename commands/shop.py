@@ -116,7 +116,7 @@ class Shop(commands.Cog):
             await ctx.send(embed=discord.Embed(title="❌ Erreur", description="Le stock de l'item est invalide.", color=discord.Color.red()))
             return
 
-        # Vérifier si le stock est suffisant
+        # Vérifier si le stock est suffisant (sauf si le stock est illimité)
         if stock != -1 and stock < quantity:
             await ctx.send(embed=discord.Embed(title="❌ Rupture de stock", description=f"Stock insuffisant pour **{name}**.", color=discord.Color.red()))
             return
@@ -132,7 +132,7 @@ class Shop(commands.Cog):
         database.update_balance(ctx.author.id, -total_cost)
         database.add_user_item(ctx.author.id, shop_id, item_id, quantity)
 
-        # Décrémenter le stock si nécessaire
+        # Décrémenter le stock si nécessaire (sauf si le stock est illimité)
         if stock != -1:
             database.decrement_item_stock(shop_id, item_id, quantity)
 
