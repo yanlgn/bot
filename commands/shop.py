@@ -26,7 +26,7 @@ class Shop(commands.Cog):
         """Afficher les items d'un shop spécifique avec leur description et stock."""
         items = database.get_shop_items(shop_id)
         if not items:
-            embed = discord.Embed(title="❌ Shop vide", description="Ce shop n’a pas d’items.", color=discord.Color.red())
+            embed = discord.Embed(title="❌ Shop vide", description="Ce shop n’a pas d’items actifs.", color=discord.Color.red())
             await ctx.send(embed=embed)
             return
 
@@ -67,8 +67,7 @@ class Shop(commands.Cog):
 
     @commands.command()
     async def add_item(self, ctx, shop_id: int, name: str, price: int, stock: int = -1, *, description: str):
-        """Ajouter un item avec description et stock (admin uniquement).
-        Stock = -1 pour illimité."""
+        """Ajouter un item avec description et stock (admin uniquement). Stock = -1 pour illimité."""
         if not ctx.author.guild_permissions.administrator:
             await ctx.send(embed=discord.Embed(title="❌ Permission refusée", description="Tu n'as pas la permission d'ajouter un item.", color=discord.Color.red()))
             return
@@ -87,15 +86,15 @@ class Shop(commands.Cog):
         await ctx.send(embed=embed)
 
     @commands.command()
-    async def remove_item(self, ctx, shop_id: int, item_id: int):
-        """Supprimer un item d'un shop (admin uniquement)."""
+    async def remove_item(self, ctx, item_id: int):
+        """Supprimer un item du shop (admin uniquement)."""
         if not ctx.author.guild_permissions.administrator:
             await ctx.send(embed=discord.Embed(title="❌ Permission refusée", description="Tu n'as pas la permission de supprimer un item.", color=discord.Color.red()))
             return
 
-        success = database.remove_item_from_shop(shop_id, item_id)
+        success = database.remove_item(item_id)
         if success:
-            await ctx.send(embed=discord.Embed(title="🗑️ Item Supprimé", description=f"Item ID {item_id} supprimé du shop.", color=discord.Color.red()))
+            await ctx.send(embed=discord.Embed(title="🗑️ Item Supprimé", description=f"Item ID {item_id} supprimé (désactivé).", color=discord.Color.red()))
         else:
             await ctx.send(embed=discord.Embed(title="❌ Erreur", description="L'item n'a pas pu être supprimé.", color=discord.Color.red()))
 
@@ -104,7 +103,7 @@ class Shop(commands.Cog):
         """Acheter un item (vérifie le stock)."""
         item = database.get_shop_item(shop_id, item_id)
         if not item:
-            await ctx.send(embed=discord.Embed(title="❌ Item introuvable", description="Cet item n'existe pas.", color=discord.Color.red()))
+            await ctx.send(embed=discord.Embed(title="❌ Item introuvable", description="Cet item n'existe pas ou est inactif.", color=discord.Color.red()))
             return
 
         item_name, price, stock = item[1], item[2], item[4]
@@ -130,13 +129,68 @@ class Shop(commands.Cog):
         """Vendre un item (80% du prix)."""
         item = database.get_shop_item(shop_id, item_id)
         if not item:
-            await ctx.send(embed=discord.Embed(title="❌ Item introuvable", description="Cet item n'existe pas.", color=discord.Color.red()))
+            await ctx.send(embed=discord.Embed(title="❌ Item introuvable", description="Cet item n'existe pas ou est inactif.", color=discord.Color.red()))
             return
 
         item_name, price = item[1], int(item[2] * 0.8)
         database.remove_user_item(ctx.author.id, shop_id, item_id)
         database.update_balance(ctx.author.id, price)
         await ctx.send(embed=discord.Embed(title="💰 Vente réussie", description=f"{ctx.author.mention} a vendu **{item_name}** pour **{price}** pièces.", color=discord.Color.blue()))
+
+    @commands.command()
+    async def items_list(self, ctx):
+        """[Admin uniquement] Liste complète de tous les items existants, actifs et inactifs."""
+        if not ctx.author.guild_permissions.administrator:
+            await ctx.send(embed=discord.Embed(title="❌ Permission refusée", description="Tu n'as pas la permission de consulter cette liste.", color=discord.Color.red()))
+            return
+
+        items = database.get_all_items()
+        if not items:
+            embed = discord.Embed(title="📜 Liste d'Items", description="Aucun item enregistré.", color=discord.Color.orange())
+            await ctx.send(embed=embed)
+            return
+
+        embed = discord.Embed(title="📜 Tous les Items", color=discord.Color.blue())
+        for item in items:
+            status = "✅ Actif" if item[6] == 1 else "❌ Inactif"
+            stock_display = "∞" if item[5] == -1 else str(item[5])
+            embed.add_field(name=f"{item[1]} (ID {item[0]})", value=f"Prix : {item[2]} | Stock : {stock_display} | {status}", inline=False)
+
+        await ctx.send(embed=embed)
+
+    @commands.command()
+    async def item_info(self, ctx, *, name: str):
+        """Afficher les informations détaillées d’un item par son nom."""
+        item = database.get_item_by_name(name)
+        if not item:
+            await ctx.send(embed=discord.Embed(title="❌ Introuvable", description=f"Aucun item nommé **{name}**.", color=discord.Color.red()))
+            return
+
+        status = "✅ Actif" if item[6] == 1 else "❌ Inactif"
+        stock_display = "∞" if item[5] == -1 else str(item[5])
+        embed = discord.Embed(title=f"🔎 Infos sur l'item : {item[1]}", color=discord.Color.purple())
+        embed.add_field(name="Prix", value=f"{item[2]} pièces", inline=True)
+        embed.add_field(name="Stock", value=stock_display, inline=True)
+        embed.add_field(name="État", value=status, inline=True)
+        embed.add_field(name="Description", value=item[3], inline=False)
+        await ctx.send(embed=embed)
+
+    @commands.command()
+    async def reactivate_item(self, ctx, item_id: int, stock: int = None):
+        """[Admin uniquement] Réactiver un item inactif et réinitialiser son stock optionnellement."""
+        if not ctx.author.guild_permissions.administrator:
+            await ctx.send(embed=discord.Embed(title="❌ Permission refusée", description="Tu n'as pas la permission de réactiver un item.", color=discord.Color.red()))
+            return
+
+        item = database.get_item_by_id(item_id)
+        if not item:
+            await ctx.send(embed=discord.Embed(title="❌ Erreur", description=f"Aucun item trouvé avec l'ID {item_id}.", color=discord.Color.red()))
+            return
+
+        database.reactivate_item(item_id, stock)
+        stock_msg = f"avec un stock de **{stock}**" if stock is not None else "sans modification de stock"
+        embed = discord.Embed(title="✅ Item réactivé", description=f"L'item **{item[1]}** a été réactivé {stock_msg}.", color=discord.Color.green())
+        await ctx.send(embed=embed)
 
 async def setup(bot):
     await bot.add_cog(Shop(bot))
