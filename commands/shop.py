@@ -107,7 +107,7 @@ class Shop(commands.Cog):
             await ctx.send(embed=discord.Embed(title="❌ Item introuvable", description=f"Aucun item nommé **{item_name}**.", color=discord.Color.red()))
             return
 
-        item_id, name, price, description, stock, active = item[0], item[1], item[2], item[3], item[5]
+        item_id, name, price, description, stock = item[0], item[1], item[2], item[3]
 
         # Vérifier si l'item est actif
         if active != 1:
