@@ -109,6 +109,13 @@ class Shop(commands.Cog):
 
         item_id, name, price, stock = item[0], item[1], item[2], item[4]
 
+        # Convertir le stock en entier (si ce n'est pas déjà le cas)
+        try:
+            stock = int(stock)  # Convertir le stock en entier
+        except (ValueError, TypeError):
+            await ctx.send(embed=discord.Embed(title="❌ Erreur", description="Le stock de l'item est invalide.", color=discord.Color.red()))
+            return
+
         # Vérifier si le stock est suffisant
         if stock != -1 and stock < quantity:
             await ctx.send(embed=discord.Embed(title="❌ Rupture de stock", description=f"Stock insuffisant pour **{name}**.", color=discord.Color.red()))
@@ -184,12 +191,10 @@ class Shop(commands.Cog):
             await ctx.send(embed=discord.Embed(title="❌ Introuvable", description=f"Aucun item nommé **{name}**.", color=discord.Color.red()))
             return
 
-        # Extraire les informations de l'item
         item_id, name, price, description, stock, active = item[0], item[1], item[2], item[3], item[5], item[6]
         status = "✅ Actif" if active == 1 else "❌ Inactif"
         stock_display = "∞" if stock == -1 else str(stock)
 
-        # Créer l'embed
         embed = discord.Embed(title=f"🔎 Infos sur l'item : {name}", color=discord.Color.purple())
         embed.add_field(name="ID", value=f"{item_id}", inline=True)
         embed.add_field(name="Prix", value=f"{price} pièces", inline=True)
