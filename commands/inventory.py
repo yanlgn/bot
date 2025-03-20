@@ -9,7 +9,7 @@ class Inventory(commands.Cog):
     @commands.command()
     async def inventaire(self, ctx):
         """Affiche l'inventaire de l'utilisateur."""
-        inventory = database.get_inventory(ctx.author.id)
+        inventory = database.get_user_inventory(ctx.author.id)
         if not inventory:
             embed = discord.Embed(title="📦 Inventaire", description="Ton inventaire est vide.", color=discord.Color.orange())
             await ctx.send(embed=embed)
