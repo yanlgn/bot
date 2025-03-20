@@ -168,21 +168,24 @@ async def vendre(self, ctx, shop_id: int, item_id: int, quantity: int = 1):
         await ctx.send(embed=embed)
 
     @commands.command()
-    async def item_info(self, ctx, *, name: str):
-        """Afficher les informations détaillées d’un item par son nom."""
-        item = database.get_item_by_name(name)
-        if not item:
-            await ctx.send(embed=discord.Embed(title="❌ Introuvable", description=f"Aucun item nommé **{name}**.", color=discord.Color.red()))
-            return
+    @commands.command()
+async def item_info(self, ctx, *, name: str):
+    """Afficher les informations détaillées d’un item par son nom."""
+    item = database.get_item_by_name(name)
+    if not item:
+        await ctx.send(embed=discord.Embed(title="❌ Introuvable", description=f"Aucun item nommé **{name}**.", color=discord.Color.red()))
+        return
 
-        status = "✅ Actif" if item[6] == 1 else "❌ Inactif"
-        stock_display = "∞" if item[5] == -1 else str(item[5])
-        embed = discord.Embed(title=f"🔎 Infos sur l'item : {item[1]}", color=discord.Color.purple())
-        embed.add_field(name="Prix", value=f"{item[2]} pièces", inline=True)
-        embed.add_field(name="Stock", value=stock_display, inline=True)
-        embed.add_field(name="État", value=status, inline=True)
-        embed.add_field(name="Description", value=item[3], inline=False)
-        await ctx.send(embed=embed)
+    item_id, name, price, description, stock, active = item[0], item[1], item[2], item[3], item[5], item[6]
+    status = "✅ Actif" if active == 1 else "❌ Inactif"
+    stock_display = "∞" if stock == -1 else str(stock)
+
+    embed = discord.Embed(title=f"🔎 Infos sur l'item : {name}", color=discord.Color.purple())
+    embed.add_field(name="Prix", value=f"{price} pièces", inline=True)
+    embed.add_field(name="Stock", value=stock_display, inline=True)
+    embed.add_field(name="État", value=status, inline=True)
+    embed.add_field(name="Description", value=description, inline=False)
+    await ctx.send(embed=embed)
 
     @commands.command()
     async def reactivate_item(self, ctx, item_id: int, stock: int = None):
