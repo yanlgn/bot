@@ -1,7 +1,8 @@
 import discord
 from discord.ext import commands
 import database
-from datetime import datetime  # Ajoutez cette importation
+from datetime import datetime
+import time  # Ajoutez cette importation pour utiliser time.time()
 
 class Economy(commands.Cog):
     def __init__(self, bot):
@@ -119,7 +120,7 @@ class Economy(commands.Cog):
 
         database.update_balance(ctx.author.id, total_salary)
         # Convertir le timestamp Unix en un objet datetime avant de l'envoyer à la base de données
-        last_collect = datetime.fromtimestamp(int(time.time()))
+        last_collect = datetime.fromtimestamp(int(time.time()))  # Utilisation de time.time()
         database.set_salary_cooldown(ctx.author.id, last_collect)
         await ctx.send(embed=discord.Embed(
             title="💰 Salaire collecté",
