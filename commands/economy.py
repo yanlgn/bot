@@ -69,5 +69,85 @@ class Economy(commands.Cog):
         embed = discord.Embed(description=f"✅ Le solde de {member.display_name} a été mis à {amount} pièces.", color=discord.Color.red())
         await ctx.send(embed=embed)
 
+    @commands.command()
+    @commands.has_permissions(administrator=True)
+    async def setsalaire(self, ctx, role: discord.Role, salaire: int, cooldown: int = 3600):
+        """[ADMIN] Attribue un salaire à un rôle."""
+        if salaire <= 0:
+            await ctx.send(embed=discord.Embed(
+                title="❌ Erreur",
+                description="Le salaire doit être supérieur à zéro.",
+                color=discord.Color.red()
+            ))
+            return
+
+        database.assign_role_salaire(role.id, salaire, cooldown)
+        await ctx.send(embed=discord.Embed(
+            title="✅ Salaire attribué",
+            description=f"Le rôle **{role.name}** a maintenant un salaire de **{salaire}** pièces toutes les **{cooldown // 3600} heures**.",
+            color=discord.Color.green()
+        ))
+
+    @commands.command()
+    async def collect(self, ctx):
+        """Collecte ton salaire en fonction de tes rôles."""
+        user_roles = [role.id for role in ctx.author.roles]
+        remaining_time = database.get_salaire_cooldown(ctx.author.id, user_roles)
+
+        if remaining_time > 0:
+            await ctx.send(embed=discord.Embed(
+                title="❌ Cooldown actif",
+                description=f"Tu dois attendre encore **{remaining_time // 3600} heures** avant de pouvoir collecter à nouveau ton salaire.",
+                color=discord.Color.red()
+            ))
+            return
+
+        total_salaire = 0
+        for role_id in user_roles:
+            salaire = database.get_role_salaire(role_id)
+            if salaire > 0:
+                total_salaire += salaire
+
+        if total_salaire == 0:
+            await ctx.send(embed=discord.Embed(
+                title="❌ Aucun salaire disponible",
+                description="Tu n'as aucun rôle avec un salaire attribué.",
+                color=discord.Color.red()
+            ))
+            return
+
+        database.update_balance(ctx.author.id, total_salaire)
+        database.set_salaire_cooldown(ctx.author.id)
+        await ctx.send(embed=discord.Embed(
+            title="💰 Salaire collecté",
+            description=f"Tu as collecté **{total_salaire}** pièces.",
+            color=discord.Color.green()
+        ))
+
+    @commands.command()
+    @commands.has_permissions(administrator=True)
+    async def salaires(self, ctx):
+        """[ADMIN] Affiche la liste de tous les rôles ayant un salaire dans le serveur."""
+        roles_salaires = database.get_all_roles_salaires()
+        if not roles_salaires:
+            await ctx.send(embed=discord.Embed(
+                title="📜 Salaires des rôles",
+                description="Aucun rôle n'a de salaire attribué.",
+                color=discord.Color.orange()
+            ))
+            return
+
+        embed = discord.Embed(title="📜 Salaires des rôles", color=discord.Color.blue())
+        for role_id, salaire, cooldown in roles_salaires:
+            role = ctx.guild.get_role(role_id)
+            if role:
+                embed.add_field(
+                    name=f"Rôle : {role.name}",
+                    value=f"💰 Salaire : {salaire} pièces\n⏳ Cooldown : {cooldown // 3600} heures",
+                    inline=False
+                )
+
+        await ctx.send(embed=embed)
+
 async def setup(bot):
     await bot.add_cog(Economy(bot))
