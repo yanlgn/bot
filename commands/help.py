@@ -20,6 +20,7 @@ class HelpDropdown(discord.ui.Select):
             embed.add_field(name="!deposit <montant>", value="Dépose de l'argent à la banque.", inline=False)
             embed.add_field(name="!withdraw <montant>", value="Retire de l'argent de la banque.", inline=False)
             embed.add_field(name="!pay <@utilisateur> <montant>", value="Paye un autre utilisateur.", inline=False)
+            embed.add_field(name="!collect", value="Collecte ton salaire en fonction de tes rôles.", inline=False)
 
         elif category == "Inventaire":
             embed = discord.Embed(title="📦 Commandes Inventaire", color=discord.Color.orange())
@@ -44,6 +45,10 @@ class HelpDropdown(discord.ui.Select):
             embed.add_field(name="!remove_item <item_id>", value="Supprime un item d'un shop.", inline=False)
             embed.add_field(name="!reactivate_item <item_id> <stock>", value="Réactive un item inactif.", inline=False)
             embed.add_field(name="!setbalance <@membre> <montant>", value="Change le solde d'un utilisateur.", inline=False)
+            embed.add_field(name="!setsalary <@rôle> <salaire> <cooldown>", value="Attribue un salaire à un rôle.", inline=False)
+            embed.add_field(name="!removesalary <@rôle>", value="Supprime le salaire d'un rôle.", inline=False)
+            embed.add_field(name="!editsalary <@rôle> <salaire> <cooldown>", value="Modifie le salaire et le cooldown d'un rôle.", inline=False)
+            embed.add_field(name="!salaries", value="Affiche la liste des rôles avec un salaire attribué.", inline=False)
 
         await interaction.response.edit_message(embed=embed, view=None)
 
