@@ -1,7 +1,6 @@
 import discord
 from discord.ext import commands
 import database
-from datetime import datetime
 import time
 
 class Economy(commands.Cog):
@@ -94,39 +93,77 @@ class Economy(commands.Cog):
     async def collect(self, ctx):
         """Collecte ton salaire en fonction de tes rôles."""
         user_roles = [role.id for role in ctx.author.roles]
-        remaining_time = database.get_salary_cooldown(ctx.author.id, user_roles)
-
-        if remaining_time > 0:
-            hours = remaining_time // 3600
-            minutes = (remaining_time % 3600) // 60
-            await ctx.send(embed=discord.Embed(
-                title="❌ Cooldown actif",
-                description=f"Tu dois attendre encore **{hours} heures et {minutes} minutes** avant de pouvoir collecter à nouveau ton salaire.",
-                color=discord.Color.red()
-            ))
-            return
-
         total_salary = 0
+        eligible_roles = []  # Rôles éligibles (cooldown terminé)
+        non_eligible_roles = []  # Rôles non éligibles (cooldown actif)
+
+        # Récupérer le dernier moment de collecte
+        conn = database.connect_db()
+        cursor = conn.cursor()
+        cursor.execute("SELECT last_collect FROM salary_cooldowns WHERE user_id = %s", (ctx.author.id,))
+        last_collect_result = cursor.fetchone()
+        last_collect = last_collect_result[0].timestamp() if last_collect_result else None
+
+        # Parcourir chaque rôle pour calculer le salaire et le cooldown
         for role_id in user_roles:
             salary = database.get_role_salary(role_id)
             if salary > 0:
-                total_salary += salary
+                # Récupérer le cooldown du rôle
+                cursor.execute("SELECT cooldown FROM role_salaries WHERE role_id = %s", (role_id,))
+                cooldown_result = cursor.fetchone()
+                cooldown = cooldown_result[0] if cooldown_result else 3600  # Cooldown par défaut de 1 heure
 
-        if total_salary == 0:
-            await ctx.send(embed=discord.Embed(
+                # Calculer le temps restant pour ce rôle
+                if last_collect:
+                    remaining_time = (last_collect + cooldown) - time.time()
+                    remaining_time = max(0, remaining_time)  # Ne pas afficher de temps négatif
+                else:
+                    remaining_time = 0  # Pas de cooldown enregistré
+
+                # Convertir le temps restant en heures, minutes et secondes
+                hours = int(remaining_time // 3600)
+                minutes = int((remaining_time % 3600) // 60)
+                seconds = int(remaining_time % 60)
+
+                # Ajouter les informations à la liste appropriée
+                role = ctx.guild.get_role(role_id)
+                if role:
+                    if remaining_time <= 0:
+                        eligible_roles.append(f"**{role.name}** : {salary} pièces")
+                        total_salary += salary
+                    else:
+                        non_eligible_roles.append(
+                            f"**{role.name}** : {salary} pièces (cooldown : {hours}h {minutes}m {seconds}s)"
+                        )
+
+        conn.close()
+
+        # Si aucun rôle n'est éligible
+        if not eligible_roles:
+            embed = discord.Embed(
                 title="❌ Aucun salaire disponible",
-                description="Tu n'as aucun rôle avec un salaire attribué.",
+                description="Tu ne peux pas collecter de salaire pour le moment.\n\n" +
+                            "**Rôles avec cooldown actif :**\n" + "\n".join(non_eligible_roles),
                 color=discord.Color.red()
-            ))
+            )
+            await ctx.send(embed=embed)
             return
 
+        # Mettre à jour le solde de l'utilisateur
         database.update_balance(ctx.author.id, total_salary)
-        database.set_salary_cooldown(ctx.author.id)  # Enregistre le moment de la collecte
-        await ctx.send(embed=discord.Embed(
+
+        # Enregistrer le cooldown pour les rôles collectés
+        database.set_salary_cooldown(ctx.author.id)
+
+        # Envoyer un message de confirmation
+        embed = discord.Embed(
             title="💰 Salaire collecté",
-            description=f"Tu as collecté **{total_salary}** pièces.",
+            description=f"Tu as collecté **{total_salary}** pièces.\n\n" +
+                        "**Rôles éligibles :**\n" + "\n".join(eligible_roles) + "\n\n" +
+                        ("**Rôles non éligibles :**\n" + "\n".join(non_eligible_roles) if non_eligible_roles else ""),
             color=discord.Color.green()
-        ))
+        )
+        await ctx.send(embed=embed)
 
     @commands.command()
     @commands.has_permissions(administrator=True)
