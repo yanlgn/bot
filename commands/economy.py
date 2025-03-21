@@ -71,9 +71,9 @@ class Economy(commands.Cog):
 
     @commands.command()
     @commands.has_permissions(administrator=True)
-    async def setsalaire(self, ctx, role: discord.Role, salaire: int, cooldown: int = 3600):
+    async def setsalary(self, ctx, role: discord.Role, salary: int, cooldown: int = 3600):
         """[ADMIN] Attribue un salaire à un rôle."""
-        if salaire <= 0:
+        if salary <= 0:
             await ctx.send(embed=discord.Embed(
                 title="❌ Erreur",
                 description="Le salaire doit être supérieur à zéro.",
@@ -81,10 +81,10 @@ class Economy(commands.Cog):
             ))
             return
 
-        database.assign_role_salary(role.id, salaire, cooldown)
+        database.assign_role_salary(role.id, salary, cooldown)
         await ctx.send(embed=discord.Embed(
             title="✅ Salaire attribué",
-            description=f"Le rôle **{role.name}** a maintenant un salaire de **{salaire}** pièces toutes les **{cooldown // 3600} heures**.",
+            description=f"Le rôle **{role.name}** a maintenant un salaire de **{salary}** pièces toutes les **{cooldown // 3600} heures**.",
             color=discord.Color.green()
         ))
 
@@ -92,7 +92,7 @@ class Economy(commands.Cog):
     async def collect(self, ctx):
         """Collecte ton salaire en fonction de tes rôles."""
         user_roles = [role.id for role in ctx.author.roles]
-        remaining_time = database.get_salaire_cooldown(ctx.author.id, user_roles)
+        remaining_time = database.get_salary_cooldown(ctx.author.id, user_roles)
 
         if remaining_time > 0:
             await ctx.send(embed=discord.Embed(
@@ -102,13 +102,13 @@ class Economy(commands.Cog):
             ))
             return
 
-        total_salaire = 0
+        total_salary = 0
         for role_id in user_roles:
-            salaire = database.get_role_salaire(role_id)
-            if salaire > 0:
-                total_salaire += salaire
+            salary = database.get_role_salary(role_id)
+            if salary > 0:
+                total_salary += salary
 
-        if total_salaire == 0:
+        if total_salary == 0:
             await ctx.send(embed=discord.Embed(
                 title="❌ Aucun salaire disponible",
                 description="Tu n'as aucun rôle avec un salaire attribué.",
@@ -116,20 +116,20 @@ class Economy(commands.Cog):
             ))
             return
 
-        database.update_balance(ctx.author.id, total_salaire)
-        database.set_salaire_cooldown(ctx.author.id)
+        database.update_balance(ctx.author.id, total_salary)
+        database.set_salary_cooldown(ctx.author.id)
         await ctx.send(embed=discord.Embed(
             title="💰 Salaire collecté",
-            description=f"Tu as collecté **{total_salaire}** pièces.",
+            description=f"Tu as collecté **{total_salary}** pièces.",
             color=discord.Color.green()
         ))
 
     @commands.command()
     @commands.has_permissions(administrator=True)
-    async def salaires(self, ctx):
+    async def salaries(self, ctx):
         """[ADMIN] Affiche la liste de tous les rôles ayant un salaire dans le serveur."""
-        roles_salaires = database.get_all_roles_salaires()
-        if not roles_salaires:
+        roles_salaries = database.get_all_roles_salaries()
+        if not roles_salaries:
             await ctx.send(embed=discord.Embed(
                 title="📜 Salaires des rôles",
                 description="Aucun rôle n'a de salaire attribué.",
@@ -138,12 +138,12 @@ class Economy(commands.Cog):
             return
 
         embed = discord.Embed(title="📜 Salaires des rôles", color=discord.Color.blue())
-        for role_id, salaire, cooldown in roles_salaires:
+        for role_id, salary, cooldown in roles_salaries:
             role = ctx.guild.get_role(role_id)
             if role:
                 embed.add_field(
                     name=f"Rôle : {role.name}",
-                    value=f"💰 Salaire : {salaire} pièces\n⏳ Cooldown : {cooldown // 3600} heures",
+                    value=f"💰 Salaire : {salary} pièces\n⏳ Cooldown : {cooldown // 3600} heures",
                     inline=False
                 )
 
