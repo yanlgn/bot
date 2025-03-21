@@ -2,7 +2,7 @@ import discord
 from discord.ext import commands
 import database
 from datetime import datetime
-import time  # Ajoutez cette importation pour utiliser time.time()
+import time
 
 class Economy(commands.Cog):
     def __init__(self, bot):
@@ -97,9 +97,11 @@ class Economy(commands.Cog):
         remaining_time = database.get_salary_cooldown(ctx.author.id, user_roles)
 
         if remaining_time > 0:
+            hours = remaining_time // 3600
+            minutes = (remaining_time % 3600) // 60
             await ctx.send(embed=discord.Embed(
                 title="❌ Cooldown actif",
-                description=f"Tu dois attendre encore **{remaining_time // 3600} heures** avant de pouvoir collecter à nouveau ton salaire.",
+                description=f"Tu dois attendre encore **{hours} heures et {minutes} minutes** avant de pouvoir collecter à nouveau ton salaire.",
                 color=discord.Color.red()
             ))
             return
@@ -119,9 +121,7 @@ class Economy(commands.Cog):
             return
 
         database.update_balance(ctx.author.id, total_salary)
-        # Convertir le timestamp Unix en un objet datetime avant de l'envoyer à la base de données
-        last_collect = datetime.fromtimestamp(int(time.time()))  # Utilisation de time.time()
-        database.set_salary_cooldown(ctx.author.id, last_collect)
+        database.set_salary_cooldown(ctx.author.id)  # Enregistre le moment de la collecte
         await ctx.send(embed=discord.Embed(
             title="💰 Salaire collecté",
             description=f"Tu as collecté **{total_salary}** pièces.",
