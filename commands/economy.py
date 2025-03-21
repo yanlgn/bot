@@ -90,6 +90,36 @@ class Economy(commands.Cog):
         ))
 
     @commands.command()
+    @commands.has_permissions(administrator=True)
+    async def removesalary(self, ctx, role: discord.Role):
+        """[ADMIN] Supprime complètement le salaire d'un rôle."""
+        database.remove_role_salary(role.id)
+        await ctx.send(embed=discord.Embed(
+            title="✅ Salaire supprimé",
+            description=f"Le rôle **{role.name}** a été complètement supprimé de la liste des salaires.",
+            color=discord.Color.green()
+        ))
+
+    @commands.command()
+    @commands.has_permissions(administrator=True)
+    async def editsalary(self, ctx, role: discord.Role, salary: int, cooldown: int):
+        """[ADMIN] Modifie le salaire et le cooldown d'un rôle."""
+        if salary < 0 or cooldown < 0:
+            await ctx.send(embed=discord.Embed(
+                title="❌ Erreur",
+                description="Le salaire et le cooldown doivent être supérieurs ou égaux à zéro.",
+                color=discord.Color.red()
+            ))
+            return
+
+        database.assign_role_salary(role.id, salary, cooldown)
+        await ctx.send(embed=discord.Embed(
+            title="✅ Salaire modifié",
+            description=f"Le rôle **{role.name}** a maintenant un salaire de **{salary}** pièces toutes les **{cooldown // 3600} heures**.",
+            color=discord.Color.green()
+        ))
+
+    @commands.command()
     async def collect(self, ctx):
         """Collecte ton salaire en fonction de tes rôles."""
         user_roles = [role.id for role in ctx.author.roles]
@@ -107,7 +137,7 @@ class Economy(commands.Cog):
         # Parcourir chaque rôle pour calculer le salaire et le cooldown
         for role_id in user_roles:
             salary = database.get_role_salary(role_id)
-            if salary > 0:
+            if salary > 0:  # Ignorer les rôles avec un salaire à 0
                 # Récupérer le cooldown du rôle
                 cursor.execute("SELECT cooldown FROM role_salaries WHERE role_id = %s", (role_id,))
                 cooldown_result = cursor.fetchone()
@@ -143,7 +173,7 @@ class Economy(commands.Cog):
             embed = discord.Embed(
                 title="❌ Aucun salaire disponible",
                 description="Tu ne peux pas collecter de salaire pour le moment.\n\n" +
-                            "**Rôles avec cooldown actif :**\n" + "\n".join(non_eligible_roles),
+                            ("**Rôles avec cooldown actif :**\n" + "\n".join(non_eligible_roles) if non_eligible_roles else "Aucun rôle avec salaire attribué."),
                 color=discord.Color.red()
             )
             await ctx.send(embed=embed)
