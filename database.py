@@ -179,6 +179,7 @@ def decrement_item_stock(shop_id, item_id, quantity):
     finally:
         if conn:
             conn.close()
+
 def get_all_items():
     conn = connect_db()
     cursor = conn.cursor()
@@ -352,10 +353,10 @@ def set_salary_cooldown(user_id):
     cursor = conn.cursor()
     cursor.execute("""
         INSERT INTO salary_cooldowns (user_id, last_collect)
-        VALUES (%s, %s)
+        VALUES (%s, NOW())
         ON CONFLICT (user_id)
         DO UPDATE SET last_collect = EXCLUDED.last_collect
-    """, (user_id, int(time.time())))
+    """, (user_id,))
     conn.commit()
     conn.close()
 
@@ -367,11 +368,11 @@ def get_salary_cooldown(user_id, role_ids):
     if not result:
         return 0
     last_collect = result[0]
-    now = int(time.time())
+    now = time.time()
     placeholders = ','.join(['%s'] * len(role_ids))
     cursor.execute(f"SELECT MIN(cooldown) FROM role_salaries WHERE role_id IN ({placeholders})", role_ids)
     cooldown = cursor.fetchone()[0] or 3600
-    remaining = cooldown - (now - last_collect)
+    remaining = cooldown - (now - last_collect.timestamp())
     conn.close()
     return remaining if remaining > 0 else 0
 
