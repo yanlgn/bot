@@ -375,6 +375,14 @@ def get_salary_cooldown(user_id, role_ids):
     remaining = cooldown - (now - last_collect.timestamp())
     conn.close()
     return remaining if remaining > 0 else 0
-
+    
+def remove_role_salary(role_id):
+    """Supprime complètement un rôle de la table role_salaries."""
+    conn = connect_db()
+    cursor = conn.cursor()
+    cursor.execute("DELETE FROM role_salaries WHERE role_id = %s", (role_id,))
+    conn.commit()
+    conn.close()
+    
 # Créer les tables si elles n'existent pas
 create_tables()
