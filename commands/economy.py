@@ -81,7 +81,7 @@ class Economy(commands.Cog):
             ))
             return
 
-        database.assign_role_salaire(role.id, salaire, cooldown)
+        database.assign_role_salary(role.id, salaire, cooldown)
         await ctx.send(embed=discord.Embed(
             title="✅ Salaire attribué",
             description=f"Le rôle **{role.name}** a maintenant un salaire de **{salaire}** pièces toutes les **{cooldown // 3600} heures**.",
