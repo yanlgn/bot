@@ -191,13 +191,13 @@ def get_all_items():
     return result
 
 def get_item_by_name(name):
-    """Récupère un item par son nom."""
+    """Récupère un item par son nom, même s'il est inactif."""
     conn = connect_db()
     cursor = conn.cursor()
     cursor.execute("""
         SELECT item_id, name, price, description, stock, active
         FROM items
-        WHERE name = %s AND active = 1
+        WHERE name = %s
         ORDER BY item_id
         LIMIT 1
     """, (name,))
