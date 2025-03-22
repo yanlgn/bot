@@ -256,6 +256,98 @@ def update_balance(user_id, amount):
     cursor.execute("UPDATE users SET balance = balance + %s WHERE user_id = %s", (amount, user_id))
     conn.commit()
     conn.close()
+def transfer_money(from_user_id, to_user_id, amount):
+    """Transfère de l'argent d'un utilisateur à un autre."""
+    conn = None
+    try:
+        conn = connect_db()
+        cursor = conn.cursor()
+
+        # Vérifie que l'utilisateur source a suffisamment d'argent
+        cursor.execute("SELECT balance FROM users WHERE user_id = %s", (from_user_id,))
+        from_balance = cursor.fetchone()
+        if not from_balance or from_balance[0] < amount:
+            raise ValueError("Solde insuffisant pour effectuer le transfert.")
+
+        # Débite l'utilisateur source
+        cursor.execute("UPDATE users SET balance = balance - %s WHERE user_id = %s", (amount, from_user_id))
+
+        # Crédite l'utilisateur cible (ou le crée s'il n'existe pas)
+        cursor.execute("""
+            INSERT INTO users (user_id, balance)
+            VALUES (%s, 0)
+            ON CONFLICT (user_id)
+            DO NOTHING
+        """, (to_user_id,))
+        cursor.execute("UPDATE users SET balance = balance + %s WHERE user_id = %s", (amount, to_user_id))
+
+        conn.commit()
+        print(f"Transfert réussi : {amount} de {from_user_id} à {to_user_id}.")
+    except Exception as e:
+        if conn:
+            conn.rollback()
+        print(f"Erreur lors du transfert d'argent : {e}")
+        raise e
+    finally:
+        if conn:
+            conn.close()
+
+def add_money(user_id, amount):
+    """Ajoute de l'argent à un utilisateur."""
+    conn = None
+    try:
+        conn = connect_db()
+        cursor = conn.cursor()
+
+        # Crée l'utilisateur s'il n'existe pas
+        cursor.execute("""
+            INSERT INTO users (user_id, balance)
+            VALUES (%s, 0)
+            ON CONFLICT (user_id)
+            DO NOTHING
+        """, (user_id,))
+
+        # Ajoute l'argent à l'utilisateur
+        cursor.execute("UPDATE users SET balance = balance + %s WHERE user_id = %s", (amount, user_id))
+
+        conn.commit()
+        print(f"Argent ajouté avec succès : {amount} à {user_id}.")
+    except Exception as e:
+        if conn:
+            conn.rollback()
+        print(f"Erreur lors de l'ajout d'argent : {e}")
+        raise e
+    finally:
+        if conn:
+            conn.close()
+
+def remove_money(user_id, amount):
+    """Retire de l'argent à un utilisateur."""
+    conn = None
+    try:
+        conn = connect_db()
+        cursor = conn.cursor()
+
+        # Vérifie que l'utilisateur a suffisamment d'argent
+        cursor.execute("SELECT balance FROM users WHERE user_id = %s", (user_id,))
+        balance = cursor.fetchone()
+        if not balance or balance[0] < amount:
+            raise ValueError("Solde insuffisant pour effectuer le retrait.")
+
+        # Retire l'argent de l'utilisateur
+        cursor.execute("UPDATE users SET balance = balance - %s WHERE user_id = %s", (amount, user_id))
+
+        conn.commit()
+        print(f"Argent retiré avec succès : {amount} de {user_id}.")
+    except Exception as e:
+        if conn:
+            conn.rollback()
+        print(f"Erreur lors du retrait d'argent : {e}")
+        raise e
+    finally:
+        if conn:
+            conn.close()
+
 
 # Gestion inventaire avec quantités
 def add_user_item(user_id, shop_id, item_id, quantity=1):
