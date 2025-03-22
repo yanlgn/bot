@@ -53,7 +53,7 @@ class Economy(commands.Cog):
         if amount <= 0:
             await ctx.send("❌ Montant invalide.")
             return
-        if database.pay(ctx.author.id, member.id, amount):
+        if database.transfer_money(ctx.author.id, member.id, amount):
             embed = discord.Embed(description=f"✅ Tu as payé {amount} pièces à {member.display_name}.", color=discord.Color.green())
             await ctx.send(embed=embed)
         else:
