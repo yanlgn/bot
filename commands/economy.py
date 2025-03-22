@@ -72,6 +72,36 @@ class Economy(commands.Cog):
 
     @commands.command()
     @commands.has_permissions(administrator=True)
+    async def add_money(self, ctx, member: discord.Member, amount: int):
+        """[ADMIN] Ajoute de l'argent à un utilisateur."""
+        if amount <= 0:
+            await ctx.send("❌ Montant invalide.")
+            return
+        try:
+            database.add_money(member.id, amount)
+            embed = discord.Embed(description=f"✅ {amount} pièces ont été ajoutées à {member.display_name}.", color=discord.Color.green())
+            await ctx.send(embed=embed)
+        except Exception as e:
+            await ctx.send(f"❌ Une erreur s'est produite : {str(e)}")
+
+    @commands.command()
+    @commands.has_permissions(administrator=True)
+    async def remove_money(self, ctx, member: discord.Member, amount: int):
+        """[ADMIN] Retire de l'argent à un utilisateur."""
+        if amount <= 0:
+            await ctx.send("❌ Montant invalide.")
+            return
+        try:
+            database.remove_money(member.id, amount)
+            embed = discord.Embed(description=f"✅ {amount} pièces ont été retirées de {member.display_name}.", color=discord.Color.green())
+            await ctx.send(embed=embed)
+        except ValueError as e:
+            await ctx.send(f"❌ {str(e)}")
+        except Exception as e:
+            await ctx.send(f"❌ Une erreur s'est produite : {str(e)}")
+
+    @commands.command()
+    @commands.has_permissions(administrator=True)
     async def setsalary(self, ctx, role: discord.Role, salary: int, cooldown: int = 3600):
         """[ADMIN] Attribue un salaire à un rôle."""
         if salary <= 0:
