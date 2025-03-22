@@ -71,7 +71,7 @@ class Inventory(commands.Cog):
             # Ajoute l'item à l'inventaire
             item_id, shop_id = item_data[0], item_data[4]  # item_id et shop_id
             database.add_user_item(member.id, shop_id, item_id, quantity)
-            await ctx.send(f"✅ {quantity}x **{item_name}** ajouté à l'inventaire de {member.display_name}.")
+            await ctx.send(f"✅ {quantity}x **{item_name}** ajouté à l'inventaire de {member.mention}.")
         except Exception as e:
             await ctx.send(f"❌ Une erreur s'est produite lors de l'ajout de l'item : {str(e)}")
 
@@ -99,7 +99,7 @@ class Inventory(commands.Cog):
             # Retire l'item de l'inventaire
             item_id, shop_id = item_data[0], item_data[4]  # item_id et shop_id
             database.remove_user_item(member.id, shop_id, item_id, quantity)
-            await ctx.send(f"✅ {quantity}x **{item_name}** retiré de l'inventaire de {member.display_name}.")
+            await ctx.send(f"✅ {quantity}x **{item_name}** retiré de l'inventaire de {member.mention}.")
         except Exception as e:
             await ctx.send(f"❌ Une erreur s'est produite lors de la suppression de l'item : {str(e)}")
 
