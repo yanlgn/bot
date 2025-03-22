@@ -30,17 +30,22 @@ class Inventory(commands.Cog):
             )
             
             # Ajoute chaque item à l'embed
-            for item_name, quantity, shop_name in inventory:
-                embed.add_field(
-                    name=item_name,
-                    value=f"Quantité : {quantity} (Shop: {shop_name})",
-                    inline=False
-                )
+            for item in inventory:
+                if len(item) == 3:  # Vérifie que chaque item a 3 éléments (nom, quantité, shop)
+                    item_name, quantity, shop_name = item
+                    embed.add_field(
+                        name=item_name,
+                        value=f"Quantité : {quantity} (Shop: {shop_name})",
+                        inline=False
+                    )
+                else:
+                    await ctx.send("❌ Une erreur s'est produite : format d'inventaire invalide.")
+                    return
 
             # Envoie l'embed
             await ctx.send(embed=embed)
         except Exception as e:
-            await ctx.send("❌ Une erreur s'est produite lors de l'affichage de l'inventaire.")
+            await ctx.send(f"❌ Une erreur s'est produite lors de l'affichage de l'inventaire : {str(e)}")
 
     @commands.command()
     @commands.has_permissions(administrator=True)
@@ -58,12 +63,17 @@ class Inventory(commands.Cog):
                 await ctx.send(f"❌ L'item **{item_name}** n'existe pas. Vérifie le nom de l'item.")
                 return
 
+            # Vérifie que item_data contient suffisamment d'éléments
+            if len(item_data) < 5:
+                await ctx.send("❌ Les données de l'item sont incomplètes.")
+                return
+
             # Ajoute l'item à l'inventaire
             item_id, shop_id = item_data[0], item_data[4]  # item_id et shop_id
             database.add_user_item(member.id, shop_id, item_id, quantity)
             await ctx.send(f"✅ {quantity}x **{item_name}** ajouté à l'inventaire de {member.display_name}.")
         except Exception as e:
-            await ctx.send("❌ Une erreur s'est produite lors de l'ajout de l'item.")
+            await ctx.send(f"❌ Une erreur s'est produite lors de l'ajout de l'item : {str(e)}")
 
     @commands.command()
     @commands.has_permissions(administrator=True)
@@ -81,12 +91,17 @@ class Inventory(commands.Cog):
                 await ctx.send(f"❌ L'item **{item_name}** n'existe pas. Vérifie le nom de l'item.")
                 return
 
+            # Vérifie que item_data contient suffisamment d'éléments
+            if len(item_data) < 5:
+                await ctx.send("❌ Les données de l'item sont incomplètes.")
+                return
+
             # Retire l'item de l'inventaire
             item_id, shop_id = item_data[0], item_data[4]  # item_id et shop_id
             database.remove_user_item(member.id, shop_id, item_id, quantity)
             await ctx.send(f"✅ {quantity}x **{item_name}** retiré de l'inventaire de {member.display_name}.")
         except Exception as e:
-            await ctx.send("❌ Une erreur s'est produite lors de la suppression de l'item.")
+            await ctx.send(f"❌ Une erreur s'est produite lors de la suppression de l'item : {str(e)}")
 
 async def setup(bot):
     await bot.add_cog(Inventory(bot))
