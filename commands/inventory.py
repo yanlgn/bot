@@ -56,9 +56,24 @@ class Inventory(commands.Cog):
         # Extraire l'ID de l'item et du shop
         item_id, shop_id = item_data[0], item_data[4]  # item_id et shop_id sont retournés par get_item_by_name
 
-        # Ajouter l'item à l'inventaire de l'utilisateur
-        database.add_user_item(member.id, shop_id, item_id, quantity)
-        await ctx.send(f"✅ {quantity}x **{item_name}** ajouté à l'inventaire de {member.display_name}.")
+        # Vérifier si l'utilisateur possède déjà l'item
+        user_inventory = database.get_user_inventory(member.id)
+        current_quantity = 0
+        for item in user_inventory:
+            if item[0] == item_name:  # item[0] est le nom de l'item
+                current_quantity = item[1]  # item[1] est la quantité
+                break
+
+        try:
+            # Ajouter l'item à l'inventaire de l'utilisateur
+            database.add_user_item(member.id, shop_id, item_id, quantity)
+            await ctx.send(
+                f"✅ {quantity}x **{item_name}** ajouté à l'inventaire de {member.display_name}.\n"
+                f"Quantité actuelle : {current_quantity + quantity}"
+            )
+        except Exception as e:
+            print(f"Erreur lors de l'ajout de l'item : {e}")
+            await ctx.send("❌ Une erreur s'est produite lors de l'ajout de l'item.")
 
     @commands.command()
     @commands.has_permissions(administrator=True)
@@ -78,9 +93,35 @@ class Inventory(commands.Cog):
         # Extraire l'ID de l'item et du shop
         item_id, shop_id = item_data[0], item_data[4]  # item_id et shop_id sont retournés par get_item_by_name
 
-        # Retirer l'item de l'inventaire de l'utilisateur
-        database.remove_user_item(member.id, shop_id, item_id, quantity)
-        await ctx.send(f"✅ {quantity}x **{item_name}** retiré de l'inventaire de {member.display_name}.")
+        # Vérifier si l'utilisateur possède l'item et en quelle quantité
+        user_inventory = database.get_user_inventory(member.id)
+        current_quantity = 0
+        for item in user_inventory:
+            if item[0] == item_name:  # item[0] est le nom de l'item
+                current_quantity = item[1]  # item[1] est la quantité
+                break
+
+        if current_quantity == 0:
+            await ctx.send(f"❌ {member.display_name} ne possède pas l'item **{item_name}**.")
+            return
+
+        if current_quantity < quantity:
+            await ctx.send(
+                f"❌ {member.display_name} ne possède que {current_quantity}x **{item_name}**.\n"
+                f"Impossible de retirer {quantity}x."
+            )
+            return
+
+        try:
+            # Retirer l'item de l'inventaire de l'utilisateur
+            database.remove_user_item(member.id, shop_id, item_id, quantity)
+            await ctx.send(
+                f"✅ {quantity}x **{item_name}** retiré de l'inventaire de {member.display_name}.\n"
+                f"Quantité restante : {current_quantity - quantity}"
+            )
+        except Exception as e:
+            print(f"Erreur lors de la suppression de l'item : {e}")
+            await ctx.send("❌ Une erreur s'est produite lors de la suppression de l'item.")
 
 async def setup(bot):
     await bot.add_cog(Inventory(bot))
