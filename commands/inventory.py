@@ -53,8 +53,8 @@ class Inventory(commands.Cog):
             database.add_user_item(member.id, shop_id, item_id, quantity)
             await ctx.send(f"✅ {quantity}x **{item_name}** ajouté à l'inventaire de {member.display_name}.")
         except Exception as e:
-            print(f"Erreur lors de l'ajout de l'item : {e}")
-            await ctx.send("❌ Une erreur s'est produite lors de l'ajout de l'item.")
+            print(f"Erreur détaillée dans additem : {e}")
+            await ctx.send("❌ Une erreur s'est produite lors de l'ajout de l'item. Vérifiez les logs pour plus de détails.")
 
     @commands.command()
     @commands.has_permissions(administrator=True)
@@ -87,8 +87,8 @@ class Inventory(commands.Cog):
             database.remove_user_item(member.id, shop_id, item_id, quantity)
             await ctx.send(f"✅ {quantity}x **{item_name}** retiré de l'inventaire de {member.display_name}.")
         except Exception as e:
-            print(f"Erreur lors de la suppression de l'item : {e}")
-            await ctx.send("❌ Une erreur s'est produite lors de la suppression de l'item.")
+            print(f"Erreur détaillée dans removeitem : {e}")
+            await ctx.send("❌ Une erreur s'est produite lors de la suppression de l'item. Vérifiez les logs pour plus de détails.")
 
 async def setup(bot):
     await bot.add_cog(Inventory(bot))
