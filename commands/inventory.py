@@ -57,27 +57,29 @@ class Inventory(commands.Cog):
                 await ctx.send("❌ La quantité doit être supérieure à zéro.")
                 return
 
-            # Récupère l'ID de l'item avec get_item_by_name
+            # Récupère l'item par son nom
             item_data = database.get_item_by_name(item_name)
             if not item_data:
                 await ctx.send(f"❌ L'item **{item_name}** n'existe pas. Vérifie le nom de l'item.")
                 return
 
-            item_id = item_data[0]  # item_id est le premier élément du tuple
+            # Récupère l'item_id (premier élément du tuple)
+            item_id = item_data[0]
+            if not isinstance(item_id, int):
+                await ctx.send("❌ L'ID de l'item est invalide.")
+                return
 
-            # Récupère les détails complets de l'item avec get_item_by_id
+            # Récupère les détails complets de l'item
             item_details = database.get_item_by_id(item_id)
             if not item_details:
                 await ctx.send(f"❌ Les détails de l'item **{item_name}** n'ont pas pu être récupérés.")
                 return
 
-            # Vérifie que item_details contient suffisamment d'éléments
-            if len(item_details) < 5:
-                await ctx.send("❌ Les données de l'item sont incomplètes.")
+            # Récupère le shop_id (cinquième élément du tuple)
+            shop_id = item_details[4]
+            if not isinstance(shop_id, int):
+                await ctx.send("❌ L'ID du shop est invalide.")
                 return
-
-            # Récupère le shop_id depuis les détails de l'item
-            shop_id = item_details[4]  # shop_id est le cinquième élément du tuple
 
             # Ajoute l'item à l'inventaire
             database.add_user_item(member.id, shop_id, item_id, quantity)
@@ -95,27 +97,29 @@ class Inventory(commands.Cog):
                 await ctx.send("❌ La quantité doit être supérieure à zéro.")
                 return
 
-            # Récupère l'ID de l'item avec get_item_by_name
+            # Récupère l'item par son nom
             item_data = database.get_item_by_name(item_name)
             if not item_data:
                 await ctx.send(f"❌ L'item **{item_name}** n'existe pas. Vérifie le nom de l'item.")
                 return
 
-            item_id = item_data[0]  # item_id est le premier élément du tuple
+            # Récupère l'item_id (premier élément du tuple)
+            item_id = item_data[0]
+            if not isinstance(item_id, int):
+                await ctx.send("❌ L'ID de l'item est invalide.")
+                return
 
-            # Récupère les détails complets de l'item avec get_item_by_id
+            # Récupère les détails complets de l'item
             item_details = database.get_item_by_id(item_id)
             if not item_details:
                 await ctx.send(f"❌ Les détails de l'item **{item_name}** n'ont pas pu être récupérés.")
                 return
 
-            # Vérifie que item_details contient suffisamment d'éléments
-            if len(item_details) < 5:
-                await ctx.send("❌ Les données de l'item sont incomplètes.")
+            # Récupère le shop_id (cinquième élément du tuple)
+            shop_id = item_details[4]
+            if not isinstance(shop_id, int):
+                await ctx.send("❌ L'ID du shop est invalide.")
                 return
-
-            # Récupère le shop_id depuis les détails de l'item
-            shop_id = item_details[4]  # shop_id est le cinquième élément du tuple
 
             # Retire l'item de l'inventaire
             database.remove_user_item(member.id, shop_id, item_id, quantity)
