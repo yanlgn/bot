@@ -7,9 +7,11 @@ import os
 DATABASE_URL = os.getenv('DATABASE_URL')  # Exemple : "postgresql://user:password@host:port/database"
 
 def connect_db():
+    """Établit une connexion à la base de données."""
     return psycopg2.connect(DATABASE_URL)
 
 def create_tables():
+    """Crée les tables nécessaires si elles n'existent pas."""
     conn = connect_db()
     cursor = conn.cursor()
 
@@ -258,48 +260,64 @@ def update_balance(user_id, amount):
 # Gestion inventaire avec quantités
 def add_user_item(user_id, shop_id, item_id, quantity=1):
     """Ajoute un item à l'inventaire d'un utilisateur."""
-    conn = connect_db()
-    cursor = conn.cursor()
-    cursor.execute("""
-        INSERT INTO user_items (user_id, shop_id, item_id, quantity)
-        VALUES (%s, %s, %s, %s)
-        ON CONFLICT (user_id, shop_id, item_id)
-        DO UPDATE SET quantity = user_items.quantity + EXCLUDED.quantity
-    """, (user_id, shop_id, item_id, quantity))
-    conn.commit()
-    conn.close()
+    conn = None
+    try:
+        conn = connect_db()
+        cursor = conn.cursor()
+        cursor.execute("""
+            INSERT INTO user_items (user_id, shop_id, item_id, quantity)
+            VALUES (%s, %s, %s, %s)
+            ON CONFLICT (user_id, shop_id, item_id)
+            DO UPDATE SET quantity = user_items.quantity + EXCLUDED.quantity
+        """, (user_id, shop_id, item_id, quantity))
+        conn.commit()
+        print(f"Item ajouté avec succès : user_id={user_id}, shop_id={shop_id}, item_id={item_id}, quantity={quantity}")
+    except Exception as e:
+        print(f"Erreur lors de l'ajout de l'item : {e}")
+        raise e  # Relancer l'exception pour la capturer dans inventory.py
+    finally:
+        if conn:
+            conn.close()
 
 def remove_user_item(user_id, shop_id, item_id, quantity=1):
     """Retire un item de l'inventaire d'un utilisateur."""
-    conn = connect_db()
-    cursor = conn.cursor()
+    conn = None
+    try:
+        conn = connect_db()
+        cursor = conn.cursor()
 
-    # Récupérer la quantité actuelle
-    cursor.execute("""
-        SELECT quantity FROM user_items
-        WHERE user_id = %s AND shop_id = %s AND item_id = %s
-    """, (user_id, shop_id, item_id))
-    result = cursor.fetchone()
+        # Récupérer la quantité actuelle
+        cursor.execute("""
+            SELECT quantity FROM user_items
+            WHERE user_id = %s AND shop_id = %s AND item_id = %s
+        """, (user_id, shop_id, item_id))
+        result = cursor.fetchone()
 
-    if result:
-        current_quantity = result[0]
+        if result:
+            current_quantity = result[0]
 
-        # Si la quantité après retrait est <= 0, supprimer l'item
-        if current_quantity <= quantity:
-            cursor.execute("""
-                DELETE FROM user_items
-                WHERE user_id = %s AND shop_id = %s AND item_id = %s
-            """, (user_id, shop_id, item_id))
-        else:
-            # Sinon, décrémenter la quantité
-            cursor.execute("""
-                UPDATE user_items
-                SET quantity = quantity - %s
-                WHERE user_id = %s AND shop_id = %s AND item_id = %s
-            """, (quantity, user_id, shop_id, item_id))
+            # Si la quantité après retrait est <= 0, supprimer l'item
+            if current_quantity <= quantity:
+                cursor.execute("""
+                    DELETE FROM user_items
+                    WHERE user_id = %s AND shop_id = %s AND item_id = %s
+                """, (user_id, shop_id, item_id))
+            else:
+                # Sinon, décrémenter la quantité
+                cursor.execute("""
+                    UPDATE user_items
+                    SET quantity = quantity - %s
+                    WHERE user_id = %s AND shop_id = %s AND item_id = %s
+                """, (quantity, user_id, shop_id, item_id))
 
-        conn.commit()
-    conn.close()
+            conn.commit()
+            print(f"Item retiré avec succès : user_id={user_id}, shop_id={shop_id}, item_id={item_id}, quantity={quantity}")
+    except Exception as e:
+        print(f"Erreur lors de la suppression de l'item : {e}")
+        raise e  # Relancer l'exception pour la capturer dans inventory.py
+    finally:
+        if conn:
+            conn.close()
 
 def get_user_inventory(user_id):
     conn = connect_db()
