@@ -21,28 +21,64 @@ class Economy(commands.Cog):
         await ctx.send(embed=embed)
 
     @commands.command()
-    async def deposit(self, ctx, amount: int):
-        """Dépose de l'argent à la banque."""
-        if amount <= 0:
-            await ctx.send("❌ Montant invalide.")
-            return
-        if database.deposit(ctx.author.id, amount):
-            embed = discord.Embed(description=f"✅ Tu as déposé {amount} pièces à la banque.", color=discord.Color.green())
+    async def deposit(self, ctx, amount: str):
+        """Dépose de l'argent à la banque. Utilise 'all' pour tout déposer."""
+        try:
+            if amount.lower() == 'all':
+                # Récupérer tout l'argent disponible dans le portefeuille
+                balance = database.get_balance(ctx.author.id)
+                if balance <= 0:
+                    await ctx.send("❌ Tu n'as pas d'argent à déposer.")
+                    return
+                amount_to_deposit = balance
+            else:
+                # Convertir le montant en entier
+                amount_to_deposit = int(amount)
+                if amount_to_deposit <= 0:
+                    await ctx.send("❌ Montant invalide.")
+                    return
+
+            # Vérifier si l'utilisateur a assez d'argent
+            if database.get_balance(ctx.author.id) < amount_to_deposit:
+                await ctx.send("❌ Tu n'as pas assez d'argent dans ton portefeuille.")
+                return
+
+            # Effectuer le dépôt
+            database.deposit(ctx.author.id, amount_to_deposit)
+            embed = discord.Embed(description=f"✅ Tu as déposé {amount_to_deposit} pièces à la banque.", color=discord.Color.green())
             await ctx.send(embed=embed)
-        else:
-            await ctx.send("❌ Tu n'as pas assez d'argent dans ton portefeuille.")
+        except ValueError:
+            await ctx.send("❌ Montant invalide. Utilise un nombre ou 'all' pour tout déposer.")
 
     @commands.command()
-    async def withdraw(self, ctx, amount: int):
-        """Retire de l'argent de la banque."""
-        if amount <= 0:
-            await ctx.send("❌ Montant invalide.")
-            return
-        if database.withdraw(ctx.author.id, amount):
-            embed = discord.Embed(description=f"✅ Tu as retiré {amount} pièces de la banque.", color=discord.Color.green())
+    async def withdraw(self, ctx, amount: str):
+        """Retire de l'argent de la banque. Utilise 'all' pour tout retirer."""
+        try:
+            if amount.lower() == 'all':
+                # Récupérer tout l'argent disponible dans la banque
+                deposit = database.get_deposit(ctx.author.id)
+                if deposit <= 0:
+                    await ctx.send("❌ Tu n'as pas d'argent à retirer.")
+                    return
+                amount_to_withdraw = deposit
+            else:
+                # Convertir le montant en entier
+                amount_to_withdraw = int(amount)
+                if amount_to_withdraw <= 0:
+                    await ctx.send("❌ Montant invalide.")
+                    return
+
+            # Vérifier si l'utilisateur a assez d'argent à la banque
+            if database.get_deposit(ctx.author.id) < amount_to_withdraw:
+                await ctx.send("❌ Tu n'as pas assez d'argent à la banque.")
+                return
+
+            # Effectuer le retrait
+            database.withdraw(ctx.author.id, amount_to_withdraw)
+            embed = discord.Embed(description=f"✅ Tu as retiré {amount_to_withdraw} pièces de la banque.", color=discord.Color.green())
             await ctx.send(embed=embed)
-        else:
-            await ctx.send("❌ Tu n'as pas assez d'argent à la banque.")
+        except ValueError:
+            await ctx.send("❌ Montant invalide. Utilise un nombre ou 'all' pour tout retirer.")
 
     @commands.command()
     async def pay(self, ctx, member: discord.Member, amount: int):
