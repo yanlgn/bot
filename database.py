@@ -257,6 +257,7 @@ def update_balance(user_id, amount):
 
 # Gestion inventaire avec quantités
 def add_user_item(user_id, shop_id, item_id, quantity=1):
+    """Ajoute un item à l'inventaire d'un utilisateur."""
     conn = connect_db()
     cursor = conn.cursor()
     cursor.execute("""
@@ -269,17 +270,15 @@ def add_user_item(user_id, shop_id, item_id, quantity=1):
     conn.close()
 
 def remove_user_item(user_id, shop_id, item_id, quantity=1):
+    """Retire un item de l'inventaire d'un utilisateur."""
     conn = connect_db()
     cursor = conn.cursor()
-    cursor.execute("SELECT quantity FROM user_items WHERE user_id = %s AND shop_id = %s AND item_id = %s", (user_id, shop_id, item_id))
-    result = cursor.fetchone()
-    if result:
-        current_quantity = result[0]
-        if current_quantity > quantity:
-            cursor.execute("UPDATE user_items SET quantity = quantity - %s WHERE user_id = %s AND shop_id = %s AND item_id = %s", (quantity, user_id, shop_id, item_id))
-        else:
-            cursor.execute("DELETE FROM user_items WHERE user_id = %s AND shop_id = %s AND item_id = %s", (user_id, shop_id, item_id))
-        conn.commit()
+    cursor.execute("""
+        UPDATE user_items
+        SET quantity = quantity - %s
+        WHERE user_id = %s AND shop_id = %s AND item_id = %s AND quantity >= %s
+    """, (quantity, user_id, shop_id, item_id, quantity))
+    conn.commit()
     conn.close()
 
 def get_user_inventory(user_id):
