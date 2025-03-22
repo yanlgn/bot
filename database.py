@@ -427,25 +427,92 @@ def get_user_inventory(user_id):
 
 # Dépôts bancaires
 def deposit(user_id, amount):
-    conn = connect_db()
-    cursor = conn.cursor()
-    cursor.execute("""
-        INSERT INTO bank_deposit (user_id, amount)
-        VALUES (%s, 0)
-        ON CONFLICT (user_id)
-        DO NOTHING
-    """, (user_id,))
-    cursor.execute("UPDATE bank_deposit SET amount = amount + %s WHERE user_id = %s", (amount, user_id))
-    conn.commit()
-    conn.close()
+    """Dépose de l'argent dans la banque et le retire du portefeuille."""
+    conn = None
+    try:
+        conn = connect_db()
+        cursor = conn.cursor()
+
+        # Vérifie que l'utilisateur a suffisamment d'argent dans le portefeuille
+        cursor.execute("SELECT balance FROM users WHERE user_id = %s", (user_id,))
+        balance = cursor.fetchone()
+        if not balance or balance[0] < amount:
+            raise ValueError("Solde insuffisant dans le portefeuille.")
+
+        # Retire l'argent du portefeuille
+        cursor.execute("UPDATE users SET balance = balance - %s WHERE user_id = %s", (amount, user_id))
+
+        # Ajoute l'argent à la banque
+        cursor.execute("""
+            INSERT INTO bank_deposit (user_id, amount)
+            VALUES (%s, 0)
+            ON CONFLICT (user_id)
+            DO NOTHING
+        """, (user_id,))
+        cursor.execute("UPDATE bank_deposit SET amount = amount + %s WHERE user_id = %s", (amount, user_id))
+
+        conn.commit()
+        print(f"Dépôt réussi : {amount} dans la banque de {user_id}.")
+    except Exception as e:
+        if conn:
+            conn.rollback()
+        print(f"Erreur lors du dépôt : {e}")
+        raise e
+    finally:
+        if conn:
+            conn.close()
+
+def withdraw(user_id, amount):
+    """Retire de l'argent de la banque et l'ajoute au portefeuille."""
+    conn = None
+    try:
+        conn = connect_db()
+        cursor = conn.cursor()
+
+        # Vérifie que l'utilisateur a suffisamment d'argent à la banque
+        cursor.execute("SELECT amount FROM bank_deposit WHERE user_id = %s", (user_id,))
+        deposit = cursor.fetchone()
+        if not deposit or deposit[0] < amount:
+            raise ValueError("Solde insuffisant à la banque.")
+
+        # Retire l'argent de la banque
+        cursor.execute("UPDATE bank_deposit SET amount = amount - %s WHERE user_id = %s", (amount, user_id))
+
+        # Ajoute l'argent au portefeuille
+        cursor.execute("""
+            INSERT INTO users (user_id, balance)
+            VALUES (%s, 0)
+            ON CONFLICT (user_id)
+            DO NOTHING
+        """, (user_id,))
+        cursor.execute("UPDATE users SET balance = balance + %s WHERE user_id = %s", (amount, user_id))
+
+        conn.commit()
+        print(f"Retrait réussi : {amount} de la banque de {user_id}.")
+    except Exception as e:
+        if conn:
+            conn.rollback()
+        print(f"Erreur lors du retrait : {e}")
+        raise e
+    finally:
+        if conn:
+            conn.close()
 
 def get_deposit(user_id):
-    conn = connect_db()
-    cursor = conn.cursor()
-    cursor.execute("SELECT amount FROM bank_deposit WHERE user_id = %s", (user_id,))
-    result = cursor.fetchone()
-    conn.close()
-    return result[0] if result else 0
+    """Récupère le montant déposé à la banque par l'utilisateur."""
+    conn = None
+    try:
+        conn = connect_db()
+        cursor = conn.cursor()
+        cursor.execute("SELECT amount FROM bank_deposit WHERE user_id = %s", (user_id,))
+        result = cursor.fetchone()
+        return result[0] if result else 0
+    except Exception as e:
+        print(f"Erreur lors de la récupération du dépôt : {e}")
+        raise e
+    finally:
+        if conn:
+            conn.close()
 
 # Gestion des salaires
 def assign_role_salary(role_id, salary, cooldown=3600):
