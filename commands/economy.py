@@ -28,27 +28,51 @@ class Economy(commands.Cog):
                 # Récupérer tout l'argent disponible dans le portefeuille
                 balance = database.get_balance(ctx.author.id)
                 if balance <= 0:
-                    await ctx.send("❌ Tu n'as pas d'argent à déposer.")
+                    embed = discord.Embed(
+                        title="❌ Erreur",
+                        description="Tu n'as pas d'argent à déposer.",
+                        color=discord.Color.red()
+                    )
+                    await ctx.send(embed=embed)
                     return
                 amount_to_deposit = balance
             else:
                 # Convertir le montant en entier
                 amount_to_deposit = int(amount)
                 if amount_to_deposit <= 0:
-                    await ctx.send("❌ Montant invalide.")
+                    embed = discord.Embed(
+                        title="❌ Erreur",
+                        description="Montant invalide.",
+                        color=discord.Color.red()
+                    )
+                    await ctx.send(embed=embed)
                     return
 
             # Vérifier si l'utilisateur a assez d'argent
             if database.get_balance(ctx.author.id) < amount_to_deposit:
-                await ctx.send("❌ Tu n'as pas assez d'argent dans ton portefeuille.")
+                embed = discord.Embed(
+                    title="❌ Erreur",
+                    description="Tu n'as pas assez d'argent dans ton portefeuille.",
+                    color=discord.Color.red()
+                )
+                await ctx.send(embed=embed)
                 return
 
             # Effectuer le dépôt
             database.deposit(ctx.author.id, amount_to_deposit)
-            embed = discord.Embed(description=f"✅ Tu as déposé {amount_to_deposit} pièces à la banque.", color=discord.Color.green())
+            embed = discord.Embed(
+                title="✅ Dépôt réussi",
+                description=f"Tu as déposé **{amount_to_deposit}** pièces à la banque.",
+                color=discord.Color.green()
+            )
             await ctx.send(embed=embed)
         except ValueError:
-            await ctx.send("❌ Montant invalide. Utilise un nombre ou 'all' pour tout déposer.")
+            embed = discord.Embed(
+                title="❌ Erreur",
+                description="Montant invalide. Utilise un nombre ou 'all' pour tout déposer.",
+                color=discord.Color.red()
+            )
+            await ctx.send(embed=embed)
 
     @commands.command()
     async def withdraw(self, ctx, amount: str):
@@ -58,52 +82,104 @@ class Economy(commands.Cog):
                 # Récupérer tout l'argent disponible dans la banque
                 deposit = database.get_deposit(ctx.author.id)
                 if deposit <= 0:
-                    await ctx.send("❌ Tu n'as pas d'argent à retirer.")
+                    embed = discord.Embed(
+                        title="❌ Erreur",
+                        description="Tu n'as pas d'argent à retirer.",
+                        color=discord.Color.red()
+                    )
+                    await ctx.send(embed=embed)
                     return
                 amount_to_withdraw = deposit
             else:
                 # Convertir le montant en entier
                 amount_to_withdraw = int(amount)
                 if amount_to_withdraw <= 0:
-                    await ctx.send("❌ Montant invalide.")
+                    embed = discord.Embed(
+                        title="❌ Erreur",
+                        description="Montant invalide.",
+                        color=discord.Color.red()
+                    )
+                    await ctx.send(embed=embed)
                     return
 
             # Vérifier si l'utilisateur a assez d'argent à la banque
             if database.get_deposit(ctx.author.id) < amount_to_withdraw:
-                await ctx.send("❌ Tu n'as pas assez d'argent à la banque.")
+                embed = discord.Embed(
+                    title="❌ Erreur",
+                    description="Tu n'as pas assez d'argent à la banque.",
+                    color=discord.Color.red()
+                )
+                await ctx.send(embed=embed)
                 return
 
             # Effectuer le retrait
             database.withdraw(ctx.author.id, amount_to_withdraw)
-            embed = discord.Embed(description=f"✅ Tu as retiré {amount_to_withdraw} pièces de la banque.", color=discord.Color.green())
+            embed = discord.Embed(
+                title="✅ Retrait réussi",
+                description=f"Tu as retiré **{amount_to_withdraw}** pièces de la banque.",
+                color=discord.Color.green()
+            )
             await ctx.send(embed=embed)
         except ValueError:
-            await ctx.send("❌ Montant invalide. Utilise un nombre ou 'all' pour tout retirer.")
+            embed = discord.Embed(
+                title="❌ Erreur",
+                description="Montant invalide. Utilise un nombre ou 'all' pour tout retirer.",
+                color=discord.Color.red()
+            )
+            await ctx.send(embed=embed)
 
     @commands.command()
     async def pay(self, ctx, member: discord.Member, amount: int):
         """Paye un autre utilisateur."""
         if member == ctx.author:
-            await ctx.send("❌ Tu ne peux pas te payer toi-même.")
+            embed = discord.Embed(
+                title="❌ Erreur",
+                description="Tu ne peux pas te payer toi-même.",
+                color=discord.Color.red()
+            )
+            await ctx.send(embed=embed)
             return
         if amount <= 0:
-            await ctx.send("❌ Montant invalide.")
+            embed = discord.Embed(
+                title="❌ Erreur",
+                description="Montant invalide.",
+                color=discord.Color.red()
+            )
+            await ctx.send(embed=embed)
             return
         if database.transfer_money(ctx.author.id, member.id, amount):
-            embed = discord.Embed(description=f"✅ Tu as payé {amount} pièces à {member.display_name}.", color=discord.Color.green())
+            embed = discord.Embed(
+                title="✅ Paiement réussi",
+                description=f"Tu as payé **{amount}** pièces à {member.display_name}.",
+                color=discord.Color.green()
+            )
             await ctx.send(embed=embed)
         else:
-            await ctx.send("❌ Tu n'as pas assez d'argent dans ton portefeuille.")
+            embed = discord.Embed(
+                title="❌ Erreur",
+                description="Tu n'as pas assez d'argent dans ton portefeuille.",
+                color=discord.Color.red()
+            )
+            await ctx.send(embed=embed)
 
     @commands.command()
     @commands.has_permissions(administrator=True)
     async def setbalance(self, ctx, member: discord.Member, amount: int):
         """[ADMIN] Change le solde d'un utilisateur."""
         if amount < 0:
-            await ctx.send("❌ Montant invalide.")
+            embed = discord.Embed(
+                title="❌ Erreur",
+                description="Montant invalide.",
+                color=discord.Color.red()
+            )
+            await ctx.send(embed=embed)
             return
         database.set_balance(member.id, amount)
-        embed = discord.Embed(description=f"✅ Le solde de {member.display_name} a été mis à {amount} pièces.", color=discord.Color.red())
+        embed = discord.Embed(
+            title="✅ Solde mis à jour",
+            description=f"Le solde de {member.display_name} a été mis à **{amount}** pièces.",
+            color=discord.Color.green()
+        )
         await ctx.send(embed=embed)
 
     @commands.command()
@@ -111,79 +187,117 @@ class Economy(commands.Cog):
     async def add_money(self, ctx, member: discord.Member, amount: int):
         """[ADMIN] Ajoute de l'argent à un utilisateur."""
         if amount <= 0:
-            await ctx.send("❌ Montant invalide.")
+            embed = discord.Embed(
+                title="❌ Erreur",
+                description="Montant invalide.",
+                color=discord.Color.red()
+            )
+            await ctx.send(embed=embed)
             return
         try:
             database.add_money(member.id, amount)
-            embed = discord.Embed(description=f"✅ {amount} pièces ont été ajoutées à {member.display_name}.", color=discord.Color.green())
+            embed = discord.Embed(
+                title="✅ Argent ajouté",
+                description=f"**{amount}** pièces ont été ajoutées à {member.display_name}.",
+                color=discord.Color.green()
+            )
             await ctx.send(embed=embed)
         except Exception as e:
-            await ctx.send(f"❌ Une erreur s'est produite : {str(e)}")
+            embed = discord.Embed(
+                title="❌ Erreur",
+                description=f"Une erreur s'est produite : {str(e)}",
+                color=discord.Color.red()
+            )
+            await ctx.send(embed=embed)
 
     @commands.command()
     @commands.has_permissions(administrator=True)
     async def remove_money(self, ctx, member: discord.Member, amount: int):
         """[ADMIN] Retire de l'argent à un utilisateur."""
         if amount <= 0:
-            await ctx.send("❌ Montant invalide.")
+            embed = discord.Embed(
+                title="❌ Erreur",
+                description="Montant invalide.",
+                color=discord.Color.red()
+            )
+            await ctx.send(embed=embed)
             return
         try:
             database.remove_money(member.id, amount)
-            embed = discord.Embed(description=f"✅ {amount} pièces ont été retirées de {member.display_name}.", color=discord.Color.green())
+            embed = discord.Embed(
+                title="✅ Argent retiré",
+                description=f"**{amount}** pièces ont été retirées de {member.display_name}.",
+                color=discord.Color.green()
+            )
             await ctx.send(embed=embed)
         except ValueError as e:
-            await ctx.send(f"❌ {str(e)}")
+            embed = discord.Embed(
+                title="❌ Erreur",
+                description=str(e),
+                color=discord.Color.red()
+            )
+            await ctx.send(embed=embed)
         except Exception as e:
-            await ctx.send(f"❌ Une erreur s'est produite : {str(e)}")
+            embed = discord.Embed(
+                title="❌ Erreur",
+                description=f"Une erreur s'est produite : {str(e)}",
+                color=discord.Color.red()
+            )
+            await ctx.send(embed=embed)
 
     @commands.command()
     @commands.has_permissions(administrator=True)
     async def setsalary(self, ctx, role: discord.Role, salary: int, cooldown: int = 3600):
         """[ADMIN] Attribue un salaire à un rôle."""
         if salary <= 0:
-            await ctx.send(embed=discord.Embed(
+            embed = discord.Embed(
                 title="❌ Erreur",
                 description="Le salaire doit être supérieur à zéro.",
                 color=discord.Color.red()
-            ))
+            )
+            await ctx.send(embed=embed)
             return
 
         database.assign_role_salary(role.id, salary, cooldown)
-        await ctx.send(embed=discord.Embed(
+        embed = discord.Embed(
             title="✅ Salaire attribué",
             description=f"Le rôle **{role.name}** a maintenant un salaire de **{salary}** pièces toutes les **{cooldown // 3600} heures**.",
             color=discord.Color.green()
-        ))
+        )
+        await ctx.send(embed=embed)
 
     @commands.command()
     @commands.has_permissions(administrator=True)
     async def removesalary(self, ctx, role: discord.Role):
         """[ADMIN] Supprime complètement le salaire d'un rôle."""
         database.remove_role_salary(role.id)
-        await ctx.send(embed=discord.Embed(
+        embed = discord.Embed(
             title="✅ Salaire supprimé",
             description=f"Le rôle **{role.name}** a été complètement supprimé de la liste des salaires.",
             color=discord.Color.green()
-        ))
+        )
+        await ctx.send(embed=embed)
 
     @commands.command()
     @commands.has_permissions(administrator=True)
     async def editsalary(self, ctx, role: discord.Role, salary: int, cooldown: int):
         """[ADMIN] Modifie le salaire et le cooldown d'un rôle."""
         if salary < 0 or cooldown < 0:
-            await ctx.send(embed=discord.Embed(
+            embed = discord.Embed(
                 title="❌ Erreur",
                 description="Le salaire et le cooldown doivent être supérieurs ou égaux à zéro.",
                 color=discord.Color.red()
-            ))
+            )
+            await ctx.send(embed=embed)
             return
 
         database.assign_role_salary(role.id, salary, cooldown)
-        await ctx.send(embed=discord.Embed(
+        embed = discord.Embed(
             title="✅ Salaire modifié",
             description=f"Le rôle **{role.name}** a maintenant un salaire de **{salary}** pièces toutes les **{cooldown // 3600} heures**.",
             color=discord.Color.green()
-        ))
+        )
+        await ctx.send(embed=embed)
 
     @commands.command()
     async def collect(self, ctx):
@@ -267,11 +381,12 @@ class Economy(commands.Cog):
         """[ADMIN] Affiche la liste de tous les rôles ayant un salaire dans le serveur."""
         roles_salaries = database.get_all_roles_salaries()
         if not roles_salaries:
-            await ctx.send(embed=discord.Embed(
+            embed = discord.Embed(
                 title="📜 Salaires des rôles",
                 description="Aucun rôle n'a de salaire attribué.",
                 color=discord.Color.orange()
-            ))
+            )
+            await ctx.send(embed=embed)
             return
 
         embed = discord.Embed(title="📜 Salaires des rôles", color=discord.Color.blue())
