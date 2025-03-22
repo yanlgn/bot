@@ -76,7 +76,7 @@ class Inventory(commands.Cog):
                 return
 
             # Récupère le shop_id (cinquième élément du tuple)
-            shop_id = item_details[4]
+            shop_id = item_details[1]
             if not isinstance(shop_id, int):
                 await ctx.send("❌ L'ID du shop est invalide.")
                 return
@@ -116,7 +116,7 @@ class Inventory(commands.Cog):
                 return
 
             # Récupère le shop_id (cinquième élément du tuple)
-            shop_id = item_details[4]
+            shop_id = item_details[1]
             if not isinstance(shop_id, int):
                 await ctx.send("❌ L'ID du shop est invalide.")
                 return
