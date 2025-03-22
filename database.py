@@ -273,12 +273,32 @@ def remove_user_item(user_id, shop_id, item_id, quantity=1):
     """Retire un item de l'inventaire d'un utilisateur."""
     conn = connect_db()
     cursor = conn.cursor()
+
+    # Récupérer la quantité actuelle
     cursor.execute("""
-        UPDATE user_items
-        SET quantity = quantity - %s
-        WHERE user_id = %s AND shop_id = %s AND item_id = %s AND quantity >= %s
-    """, (quantity, user_id, shop_id, item_id, quantity))
-    conn.commit()
+        SELECT quantity FROM user_items
+        WHERE user_id = %s AND shop_id = %s AND item_id = %s
+    """, (user_id, shop_id, item_id))
+    result = cursor.fetchone()
+
+    if result:
+        current_quantity = result[0]
+
+        # Si la quantité après retrait est <= 0, supprimer l'item
+        if current_quantity <= quantity:
+            cursor.execute("""
+                DELETE FROM user_items
+                WHERE user_id = %s AND shop_id = %s AND item_id = %s
+            """, (user_id, shop_id, item_id))
+        else:
+            # Sinon, décrémenter la quantité
+            cursor.execute("""
+                UPDATE user_items
+                SET quantity = quantity - %s
+                WHERE user_id = %s AND shop_id = %s AND item_id = %s
+            """, (quantity, user_id, shop_id, item_id))
+
+        conn.commit()
     conn.close()
 
 def get_user_inventory(user_id):
