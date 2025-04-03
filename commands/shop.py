@@ -39,6 +39,18 @@ class Shop(commands.Cog):
         
         pages = menus.MenuPages(source=ShopPaginator(data, title, color), clear_reactions_after=True)
         await pages.start(ctx)
+        
+    @commands.command()
+    async def create_shop(self, ctx, name: str, *, description: str):
+        """Créer un shop avec description (admin uniquement)."""
+        if not ctx.author.guild_permissions.administrator:
+            await ctx.send(embed=discord.Embed(title="❌ Permission refusée", description="Tu n'as pas la permission de créer un shop.", color=discord.Color.red()))
+            return
+
+        shop_id = database.create_shop(name, description)
+        embed = discord.Embed(title="🏪 Nouveau Shop créé", description=f"Nom : {name}\n📖 {description}\nID : {shop_id}", color=discord.Color.blue())
+        await ctx.send(embed=embed)
+
 
     @commands.command()
     async def shops(self, ctx):
@@ -52,16 +64,6 @@ class Shop(commands.Cog):
         items = database.get_shop_items(shop_id)
         await self.paginate(ctx, items, f"🛍️ Items du Shop {shop_id}", discord.Color.green())
 
-    @commands.command()
-    async def create_shop(self, ctx, name: str, *, description: str):
-        """Créer un shop avec description (admin uniquement)."""
-        if not ctx.author.guild_permissions.administrator:
-            await ctx.send(embed=discord.Embed(title="❌ Permission refusée", description="Tu n'as pas la permission de créer un shop.", color=discord.Color.red()))
-            return
-
-        shop_id = database.create_shop(name, description)
-        embed = discord.Embed(title="🏪 Nouveau Shop créé", description=f"Nom : {name}\n📖 {description}\nID : {shop_id}", color=discord.Color.blue())
-        await ctx.send(embed=embed)
 
     @commands.command()
     async def delete_shop(self, ctx, shop_id: int):
