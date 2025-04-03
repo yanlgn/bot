@@ -1,6 +1,8 @@
 import discord
 from discord.ext import commands
+from discord.ui import Button, View
 import database
+import asyncio
 
 class Shop(commands.Cog):
     def __init__(self, bot):
@@ -35,30 +37,43 @@ class Shop(commands.Cog):
             
             pages.append(embed)
         
-        message = await ctx.send(embed=pages[0])
+        current_page = 0
+        message = await ctx.send(embed=pages[current_page])
+        
         if len(pages) > 1:
-            await message.add_reaction("⬅️")
-            await message.add_reaction("➡️")
-
-            def check(reaction, user):
-                return user == ctx.author and str(reaction.emoji) in ["⬅️", "➡️"] and reaction.message.id == message.id
-
-            page = 0
-            while True:
-                try:
-                    reaction, user = await self.bot.wait_for("reaction_add", timeout=60.0, check=check)
-                    
-                    if str(reaction.emoji) == "➡️" and page < len(pages) - 1:
-                        page += 1
-                    elif str(reaction.emoji) == "⬅️" and page > 0:
-                        page -= 1
-                    
-                    await message.edit(embed=pages[page])
-                    await message.remove_reaction(reaction, user)
+            # Création des boutons
+            previous_button = Button(emoji="⬅️", style=discord.ButtonStyle.blurple)
+            next_button = Button(emoji="➡️", style=discord.ButtonStyle.blurple)
+            
+            # Création de la vue
+            view = View(timeout=60)
+            view.add_item(previous_button)
+            view.add_item(next_button)
+            
+            await message.edit(view=view)
+            
+            # Gestion des interactions
+            async def button_callback(interaction):
+                nonlocal current_page
                 
-                except asyncio.TimeoutError:
-                    await message.clear_reactions()
-                    break
+                if interaction.user != ctx.author:
+                    return await interaction.response.send_message("Seul l'auteur de la commande peut interagir.", ephemeral=True)
+                
+                if interaction.component == previous_button:
+                    current_page = max(0, current_page - 1)
+                elif interaction.component == next_button:
+                    current_page = min(len(pages) - 1, current_page + 1)
+                
+                await interaction.response.edit_message(embed=pages[current_page], view=view)
+            
+            previous_button.callback = button_callback
+            next_button.callback = button_callback
+            
+            # Timeout
+            async def on_timeout():
+                await message.edit(view=None)
+            
+            view.on_timeout = on_timeout
 
     @commands.command()
     async def shops(self, ctx):
