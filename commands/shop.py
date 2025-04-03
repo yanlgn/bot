@@ -1,45 +1,69 @@
 import discord
-from discord.ext import commands
+from discord.ext import commands, menus
 import database
+
+class ShopPaginator(menus.ListPageSource):
+    def __init__(self, data, title, color, per_page=5):
+        super().__init__(data, per_page=per_page)
+        self.title = title
+        self.color = color
+
+    async def format_page(self, menu, entries):
+        embed = discord.Embed(title=self.title, color=self.color)
+        
+        for entry in entries:
+            if len(entry) == 3:  # Format shops (id, name, description)
+                shop_id, name, description = entry
+                short_desc = (description[:150] + '...') if len(description) > 150 else description
+                embed.add_field(
+                    name=f"{name} (ID: {shop_id})",
+                    value=f"📖 {short_desc}",
+                    inline=False
+                )
+            elif len(entry) == 5:  # Format items (id, name, price, description, stock)
+                item_id, name, price, description, stock = entry
+                stock_display = "∞" if stock == -1 else str(stock)
+                short_desc = (description[:150] + '...') if len(description) > 150 else description
+                embed.add_field(
+                    name=f"{name} (ID: {item_id})",
+                    value=f"💰 Prix: {price} pièces\n📖 {short_desc}\n📦 Stock: {stock_display}",
+                    inline=False
+                )
+            elif len(entry) >= 6:  # Format items_list (id, name, price, description, stock, active, ...)
+                status = "✅ Actif" if entry[5] == 1 else "❌ Inactif"
+                stock_display = "∞" if entry[4] == -1 else str(entry[4])
+                embed.add_field(
+                    name=f"{entry[1]} (ID: {entry[0]})",
+                    value=f"Prix: {entry[2]} | Stock: {stock_display} | {status}",
+                    inline=False
+                )
+        
+        embed.set_footer(text=f"Page {menu.current_page + 1}/{self.get_max_pages()}")
+        return embed
 
 class Shop(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
+    async def paginate(self, ctx, data, title, color):
+        if not data:
+            embed = discord.Embed(title=title, description="Aucun élément trouvé.", color=discord.Color.red())
+            return await ctx.send(embed=embed)
+        
+        pages = menus.MenuPages(source=ShopPaginator(data, title, color), clear_reactions_after=True)
+        await pages.start(ctx)
+
     @commands.command()
     async def shops(self, ctx):
-        """Afficher la liste de tous les shops avec description."""
+        """Affiche la liste paginée de tous les shops"""
         shops = database.get_shops()
-        if not shops:
-            embed = discord.Embed(title="🏪 Shops", description="Aucun shop disponible.", color=discord.Color.red())
-            await ctx.send(embed=embed)
-            return
-
-        embed = discord.Embed(title="🏪 Liste des Shops", color=discord.Color.blue())
-        for shop_id, name, description in shops:
-            embed.add_field(name=f"{name} (ID : {shop_id})", value=f"📖 {description}", inline=False)
-
-        await ctx.send(embed=embed)
+        await self.paginate(ctx, shops, "🏪 Liste des Shops", discord.Color.blue())
 
     @commands.command()
     async def shop(self, ctx, shop_id: int):
-        """Afficher les items d'un shop spécifique avec leur description et stock."""
+        """Affiche les items d'un shop spécifique avec pagination"""
         items = database.get_shop_items(shop_id)
-        if not items:
-            embed = discord.Embed(title="❌ Shop vide", description="Ce shop n’a pas d’items actifs.", color=discord.Color.red())
-            await ctx.send(embed=embed)
-            return
-
-        embed = discord.Embed(title=f"🛍️ Items du Shop {shop_id}", color=discord.Color.green())
-        for item_id, name, price, description, stock in items:
-            stock_display = "∞" if stock == -1 else str(stock)
-            embed.add_field(
-                name=f"{name} (ID : {item_id})",
-                value=f"💰 Prix : {price} pièces\n📖 {description}\n📦 Stock : {stock_display}",
-                inline=False
-            )
-
-        await ctx.send(embed=embed)
+        await self.paginate(ctx, items, f"🛍️ Items du Shop {shop_id}", discord.Color.green())
 
     @commands.command()
     async def create_shop(self, ctx, name: str, *, description: str):
@@ -101,10 +125,8 @@ class Shop(commands.Cog):
     @commands.command()
     async def acheter(self, ctx, shop_id: int, item_name: str, quantity: int = 1):
         """Acheter un item par son nom."""
-        # Récupérer l'item par son nom
         item = database.get_item_by_name(item_name)
         
-        # Vérifier si l'item existe
         if not item:
             await ctx.send(embed=discord.Embed(
                 title="❌ Item introuvable",
@@ -113,10 +135,8 @@ class Shop(commands.Cog):
             ))
             return
 
-        # Extraire les informations de l'item
         item_id, name, price, description, stock, active = item
 
-        # Vérifier si l'item est actif
         if active != 1:
             await ctx.send(embed=discord.Embed(
                 title="❌ Item inactif",
@@ -125,7 +145,6 @@ class Shop(commands.Cog):
             ))
             return
 
-        # Vérifier si le stock est suffisant
         if stock != -1 and stock < quantity:
             await ctx.send(embed=discord.Embed(
                 title="❌ Stock insuffisant",
@@ -134,10 +153,7 @@ class Shop(commands.Cog):
             ))
             return
 
-        # Calculer le coût total
         total_cost = price * quantity
-
-        # Vérifier si l'utilisateur a assez d'argent
         user_balance = database.get_balance(ctx.author.id)
         if user_balance < total_cost:
             await ctx.send(embed=discord.Embed(
@@ -147,27 +163,19 @@ class Shop(commands.Cog):
             ))
             return
 
-        # Effectuer l'achat
         try:
-            # Retirer l'argent de l'utilisateur
             database.update_balance(ctx.author.id, -total_cost)
-
-            # Ajouter l'item à l'inventaire de l'utilisateur
             database.add_user_item(ctx.author.id, shop_id, item_id, quantity)
 
-            # Décrémenter le stock si nécessaire
             if stock != -1:
-                print(f"Décrémentation du stock pour shop_id={shop_id}, item_id={item_id}, quantité={quantity}")  # Log
-                database.decrement_item_stock(shop_id, item_id, quantity)  # Décrémenter de la quantité totale
+                database.decrement_item_stock(shop_id, item_id, quantity)
 
-            # Envoyer un message de confirmation
             await ctx.send(embed=discord.Embed(
                 title="✅ Achat réussi",
                 description=f"{ctx.author.mention} a acheté {quantity}x **{name}** pour **{total_cost}** pièces.",
                 color=discord.Color.green()
             ))
         except Exception as e:
-            # En cas d'erreur, annuler l'achat et informer l'utilisateur
             await ctx.send(embed=discord.Embed(
                 title="❌ Erreur lors de l'achat",
                 description=f"Une erreur s'est produite lors de l'achat de **{name}**. Veuillez réessayer.",
@@ -178,7 +186,6 @@ class Shop(commands.Cog):
     @commands.command()
     async def vendre(self, ctx, shop_id: int, item_name: str, quantity: int = 1):
         """Vendre un item par son nom (80% du prix)."""
-        # Récupérer l'item par son nom
         item = database.get_item_by_name(item_name)
         if not item:
             await ctx.send(embed=discord.Embed(title="❌ Item introuvable", description=f"Aucun item nommé **{item_name}**.", color=discord.Color.red()))
@@ -187,14 +194,12 @@ class Shop(commands.Cog):
         item_id, name, price = item[0], item[1], int(item[2] * 0.8)
         total_earned = price * quantity
 
-        # Vérifier si l'utilisateur possède l'item en quantité suffisante
         inventory = database.get_user_inventory(ctx.author.id)
         user_has_item = any(i[0] == name and i[1] >= quantity for i in inventory)
         if not user_has_item:
             await ctx.send(embed=discord.Embed(title="❌ Quantité insuffisante", description=f"Tu ne possèdes pas {quantity}x **{name}**.", color=discord.Color.red()))
             return
 
-        # Effectuer la vente
         database.remove_user_item(ctx.author.id, shop_id, item_id, quantity)
         database.update_balance(ctx.author.id, total_earned)
         await ctx.send(embed=discord.Embed(title="💰 Vente réussie", description=f"{ctx.author.mention} a vendu {quantity}x **{name}** pour **{total_earned}** pièces.", color=discord.Color.blue()))
@@ -207,22 +212,11 @@ class Shop(commands.Cog):
             return
 
         items = database.get_all_items()
-        if not items:
-            embed = discord.Embed(title="📜 Liste d'Items", description="Aucun item enregistré.", color=discord.Color.orange())
-            await ctx.send(embed=embed)
-            return
-
-        embed = discord.Embed(title="📜 Tous les Items", color=discord.Color.blue())
-        for item in items:
-            status = "✅ Actif" if item[6] == 1 else "❌ Inactif"
-            stock_display = "∞" if item[5] == -1 else str(item[5])
-            embed.add_field(name=f"{item[1]} (ID {item[0]})", value=f"Prix : {item[2]} | Stock : {stock_display} | {status}", inline=False)
-
-        await ctx.send(embed=embed)
+        await self.paginate(ctx, items, "📜 Tous les Items", discord.Color.blue())
 
     @commands.command()
     async def item_info(self, ctx, *, name: str):
-        """Afficher les informations détaillées d’un item par son nom."""
+        """Afficher les informations détaillées d'un item par son nom."""
         item = database.get_item_by_name(name)
         if not item:
             await ctx.send(embed=discord.Embed(title="❌ Introuvable", description=f"Aucun item nommé **{name}**.", color=discord.Color.red()))
