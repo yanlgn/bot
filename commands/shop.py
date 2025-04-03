@@ -12,29 +12,16 @@ class ShopPaginator(menus.ListPageSource):
         embed = discord.Embed(title=self.title, color=self.color)
         
         for entry in entries:
-            if len(entry) == 3:  # Format shops (id, name, description)
+            if len(entry) == 3:  # Format shops
                 shop_id, name, description = entry
-                short_desc = (description[:150] + '...') if len(description) > 150 else description
-                embed.add_field(
-                    name=f"{name} (ID: {shop_id})",
-                    value=f"📖 {short_desc}",
-                    inline=False
-                )
-            elif len(entry) == 5:  # Format items (id, name, price, description, stock)
-                item_id, name, price, description, stock = entry
+                embed.add_field(name=f"{name} (ID: {shop_id})", value=f"📖 {description[:200]}", inline=False)
+            elif len(entry) >= 5:  # Format items
+                item_id, name, price, description = entry[:4]
+                stock = entry[4] if len(entry) > 4 else -1
                 stock_display = "∞" if stock == -1 else str(stock)
-                short_desc = (description[:150] + '...') if len(description) > 150 else description
                 embed.add_field(
                     name=f"{name} (ID: {item_id})",
-                    value=f"💰 Prix: {price} pièces\n📖 {short_desc}\n📦 Stock: {stock_display}",
-                    inline=False
-                )
-            elif len(entry) >= 6:  # Format items_list (id, name, price, description, stock, active, ...)
-                status = "✅ Actif" if entry[5] == 1 else "❌ Inactif"
-                stock_display = "∞" if entry[4] == -1 else str(entry[4])
-                embed.add_field(
-                    name=f"{entry[1]} (ID: {entry[0]})",
-                    value=f"Prix: {entry[2]} | Stock: {stock_display} | {status}",
+                    value=f"💰 Prix: {price}\n📖 {description[:200]}\n📦 Stock: {stock_display}",
                     inline=False
                 )
         
@@ -47,7 +34,7 @@ class Shop(commands.Cog):
 
     async def paginate(self, ctx, data, title, color):
         if not data:
-            embed = discord.Embed(title=title, description="Aucun élément trouvé.", color=discord.Color.red())
+            embed = discord.Embed(title=title, description="Aucun élément trouvé", color=discord.Color.red())
             return await ctx.send(embed=embed)
         
         pages = menus.MenuPages(source=ShopPaginator(data, title, color), clear_reactions_after=True)
@@ -55,13 +42,13 @@ class Shop(commands.Cog):
 
     @commands.command()
     async def shops(self, ctx):
-        """Affiche la liste paginée de tous les shops"""
+        """Affiche tous les shops disponibles"""
         shops = database.get_shops()
         await self.paginate(ctx, shops, "🏪 Liste des Shops", discord.Color.blue())
 
     @commands.command()
     async def shop(self, ctx, shop_id: int):
-        """Affiche les items d'un shop spécifique avec pagination"""
+        """Affiche les items d'un shop spécifique"""
         items = database.get_shop_items(shop_id)
         await self.paginate(ctx, items, f"🛍️ Items du Shop {shop_id}", discord.Color.green())
 
