@@ -19,7 +19,6 @@ intents.message_content = True
 
 bot = commands.Bot(command_prefix="!", intents=intents, help_command=None)
 
-
 # Charger les commandes depuis le dossier "commands"
 async def load_extensions():
     for filename in os.listdir("commands"):
@@ -30,12 +29,15 @@ async def load_extensions():
             except Exception as e:
                 print(f"❌ Erreur en chargeant {filename}: {e}")
 
-
 @bot.event
 async def on_ready():
     print(f"✅ {bot.user} est en ligne !")
     await load_extensions()
-
+    try:
+        synced = await bot.tree.sync()
+        print(f"✅ {len(synced)} commandes slash synchronisées !")
+    except Exception as e:
+        print(f"❌ Erreur de synchronisation des commandes slash: {e}")
 
 # --- Serveur Flask pour maintenir le bot en ligne ---
 app = Flask(__name__)
