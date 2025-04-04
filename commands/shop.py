@@ -8,7 +8,6 @@ import asyncio
 class Shop(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
-        self.active_paginators = {}
 
     class PaginatorView(View):
         def __init__(self, author_id, pages, timeout=60):
@@ -16,7 +15,6 @@ class Shop(commands.Cog):
             self.author_id = author_id
             self.pages = pages
             self.current_page = 0
-            self.message = None
 
             # Boutons précédent/suivant
             self.prev_button = Button(emoji="⬅️", style=discord.ButtonStyle.blurple)
@@ -122,187 +120,223 @@ class Shop(commands.Cog):
         items = database.get_shop_items(shop_id)
         await self.send_paginated(interaction, items, f"🛍️ Magasin #{shop_id}", discord.Color.green())
 
-    @app_commands.command(name="acheter", description="Acheter un article par son nom")
+    @app_commands.command(name="create_shop", description="Créer un nouveau shop (Admin)")
+    @app_commands.default_permissions(administrator=True)
     @app_commands.describe(
-        shop_id="ID du magasin",
-        item_name="Nom de l'article",
-        quantity="Quantité à acheter (défaut: 1)"
+        name="Le nom du nouveau shop",
+        description="La description du shop"
+    )
+    async def create_shop(self, interaction: discord.Interaction, name: str, description: str):
+        shop_id = database.create_shop(name, description)
+        embed = discord.Embed(
+            title="🏪 Nouveau Shop créé",
+            description=f"Nom: {name}\nDescription: {description}\nID: {shop_id}",
+            color=discord.Color.blue()
+        )
+        await interaction.response.send_message(embed=embed)
+
+    @app_commands.command(name="delete_shop", description="Supprimer un shop (Admin seulement)")
+    @app_commands.default_permissions(administrator=True)
+    @app_commands.describe(shop_id="L'ID du shop à supprimer")
+    async def delete_shop(self, interaction: discord.Interaction, shop_id: int):
+        success = database.delete_shop(shop_id)
+        if success:
+            embed = discord.Embed(title="🗑️ Shop Supprimé", 
+                                description=f"Le shop ID {shop_id} a été supprimé.", 
+                                color=discord.Color.red())
+        else:
+            embed = discord.Embed(title="❌ Erreur", 
+                                description="Le shop n'a pas pu être supprimé.", 
+                                color=discord.Color.red())
+        await interaction.response.send_message(embed=embed)
+
+    @app_commands.command(name="add_item", description="Ajouter un item à un shop (Admin seulement)")
+    @app_commands.default_permissions(administrator=True)
+    @app_commands.describe(
+        shop_id="L'ID du shop où ajouter l'item",
+        name="Le nom de l'item",
+        price="Le prix de l'item (doit être > 0)",
+        stock="Le stock initial (-1 pour illimité)",
+        description="La description de l'item"
+    )
+    async def add_item(self, interaction: discord.Interaction, shop_id: int, name: str, price: app_commands.Range[int, 1], stock: int = -1, description: str = ""):
+        item_id = database.add_item_to_shop(shop_id, name, price, description, stock)
+        stock_display = "∞" if stock == -1 else str(stock)
+        embed = discord.Embed(
+            title="🛍️ Nouvel Item ajouté",
+            description=f"Item : {name}\nPrix : {price} pièces\n📖 {description}\n📦 Stock : {stock_display}\nDans le shop ID {shop_id}",
+            color=discord.Color.green()
+        )
+        await interaction.response.send_message(embed=embed)
+
+    @app_commands.command(name="acheter", description="Acheter un item par son nom")
+    @app_commands.describe(
+        shop_id="L'ID du shop où acheter",
+        item_name="Le nom de l'item à acheter",
+        quantity="La quantité à acheter (défaut: 1)"
     )
     async def acheter(self, interaction: discord.Interaction, shop_id: int, item_name: str, quantity: app_commands.Range[int, 1] = 1):
-        """Commande pour acheter un item"""
         item = database.get_item_by_name(item_name)
         
         if not item:
-            return await interaction.response.send_message(
-                embed=discord.Embed(
-                    title="❌ Article introuvable",
-                    description=f"Aucun article nommé '{item_name}' trouvé.",
-                    color=discord.Color.red()
-                ),
-                ephemeral=True
-            )
+            await interaction.response.send_message(embed=discord.Embed(
+                title="❌ Item introuvable",
+                description=f"Aucun item nommé **{item_name}** n'a été trouvé.",
+                color=discord.Color.red()
+            ))
+            return
 
         item_id, name, price, description, stock, active = item
 
-        if not active:
-            return await interaction.response.send_message(
-                embed=discord.Embed(
-                    title="❌ Article indisponible",
-                    description="Cet article n'est plus en vente.",
-                    color=discord.Color.red()
-                ),
-                ephemeral=True
-            )
+        if active != 1:
+            await interaction.response.send_message(embed=discord.Embed(
+                title="❌ Item inactif",
+                description=f"L'item **{name}** n'est pas disponible à l'achat.",
+                color=discord.Color.red()
+            ))
+            return
 
         if stock != -1 and stock < quantity:
-            return await interaction.response.send_message(
-                embed=discord.Embed(
-                    title="❌ Stock insuffisant",
-                    description=f"Il ne reste que {stock} unité(s) disponible(s).",
-                    color=discord.Color.red()
-                ),
-                ephemeral=True
-            )
+            await interaction.response.send_message(embed=discord.Embed(
+                title="❌ Stock insuffisant",
+                description=f"Il ne reste que {stock} unités de **{name}**.",
+                color=discord.Color.red()
+            ))
+            return
 
-        total_price = price * quantity
+        total_cost = price * quantity
         user_balance = database.get_balance(interaction.user.id)
-
-        if user_balance < total_price:
-            return await interaction.response.send_message(
-                embed=discord.Embed(
-                    title="❌ Solde insuffisant",
-                    description=f"Vous n'avez que {user_balance} pièces (nécessaire: {total_price}).",
-                    color=discord.Color.red()
-                ),
-                ephemeral=True
-            )
+        if user_balance < total_cost:
+            await interaction.response.send_message(embed=discord.Embed(
+                title="❌ Solde insuffisant",
+                description=f"Tu n'as pas assez d'argent pour acheter {quantity}x **{name}**.",
+                color=discord.Color.red()
+            ))
+            return
 
         try:
-            # Effectuer l'achat
-            database.update_balance(interaction.user.id, -total_price)
+            database.update_balance(interaction.user.id, -total_cost)
             database.add_user_item(interaction.user.id, shop_id, item_id, quantity)
             
             if stock != -1:
                 database.decrement_item_stock(shop_id, item_id, quantity)
 
-            embed = discord.Embed(
+            await interaction.response.send_message(embed=discord.Embed(
                 title="✅ Achat réussi",
-                description=f"Vous avez acheté {quantity}x {name} pour {total_price} pièces.",
+                description=f"{interaction.user.mention} a acheté {quantity}x **{name}** pour **{total_cost}** pièces.",
                 color=discord.Color.green()
-            )
-            await interaction.response.send_message(embed=embed)
-
+            ))
         except Exception as e:
-            await interaction.response.send_message(
-                embed=discord.Embed(
-                    title="❌ Erreur lors de l'achat",
-                    description="Une erreur est survenue, veuillez réessayer.",
-                    color=discord.Color.red()
-                ),
-                ephemeral=True
-            )
-            print(f"Erreur achat: {e}")
-
-    @app_commands.command(name="vendre", description="Vendre un article de votre inventaire")
+            await interaction.response.send_message(embed=discord.Embed(
+                title="❌ Erreur lors de l'achat",
+                description=f"Une erreur s'est produite lors de l'achat de **{name}**. Veuillez réessayer.",
+                color=discord.Color.red()
+            ))
+            print(f"Erreur lors de l'achat : {e}")
+            
+    @app_commands.command(name="vendre", description="Vendre un item")
     @app_commands.describe(
-        shop_id="ID du magasin d'origine",
-        item_name="Nom de l'article",
-        quantity="Quantité à vendre (défaut: 1)"
+        shop_id="L'ID du shop d'origine de l'item",
+        item_name="Le nom de l'item à vendre",
+        quantity="La quantité à vendre (défaut: 1)"
     )
     async def vendre(self, interaction: discord.Interaction, shop_id: int, item_name: str, quantity: app_commands.Range[int, 1] = 1):
-        """Commande pour vendre un item"""
         item = database.get_item_by_name(item_name)
-        
         if not item:
-            return await interaction.response.send_message(
-                embed=discord.Embed(
-                    title="❌ Article introuvable",
-                    description=f"Aucun article nommé '{item_name}' trouvé.",
-                    color=discord.Color.red()
-                ),
-                ephemeral=True
-            )
+            await interaction.response.send_message(embed=discord.Embed(
+                title="❌ Item introuvable",
+                description=f"Aucun item nommé **{item_name}**.",
+                color=discord.Color.red()
+            ))
+            return
 
-        item_id, name, price = item[0], item[1], item[2]
-        sell_price = int(price * 0.8) * quantity  # 80% du prix d'achat
+        item_id, name, price = item[0], item[1], int(item[2] * 0.8)
+        total_earned = price * quantity
 
-        # Vérifier si l'utilisateur possède l'item
         inventory = database.get_user_inventory(interaction.user.id)
-        has_item = any(i[0] == name and i[1] >= quantity for i in inventory)
+        user_has_item = any(i[0] == name and i[1] >= quantity for i in inventory)
+        if not user_has_item:
+            await interaction.response.send_message(embed=discord.Embed(
+                title="❌ Quantité insuffisante",
+                description=f"Tu ne possèdes pas {quantity}x **{name}**.",
+                color=discord.Color.red()
+            ))
+            return
 
-        if not has_item:
-            return await interaction.response.send_message(
-                embed=discord.Embed(
-                    title="❌ Quantité insuffisante",
-                    description=f"Vous ne possédez pas {quantity}x {name}.",
-                    color=discord.Color.red()
-                ),
-                ephemeral=True
-            )
+        database.remove_user_item(interaction.user.id, shop_id, item_id, quantity)
+        database.update_balance(interaction.user.id, total_earned)
+        await interaction.response.send_message(embed=discord.Embed(
+            title="💰 Vente réussie",
+            description=f"{interaction.user.mention} a vendu {quantity}x **{name}** pour **{total_earned}** pièces.",
+            color=discord.Color.blue()
+        ))
+        
+    @app_commands.command(name="item_info", description="Afficher les informations détaillées d'un item")
+    @app_commands.describe(name="Le nom de l'item à rechercher")
+    async def item_info(self, interaction: discord.Interaction, name: str):
+        item = database.get_item_by_name(name)
+        if not item:
+            await interaction.response.send_message(embed=discord.Embed(
+                title="❌ Introuvable", 
+                description=f"Aucun item nommé **{name}**.", 
+                color=discord.Color.red()
+            ))
+            return
 
-        try:
-            database.remove_user_item(interaction.user.id, shop_id, item_id, quantity)
-            database.update_balance(interaction.user.id, sell_price)
+        item_id, name, price, description, stock, active = item[0], item[1], item[2], item[3], item[4], item[5]
+        stock_display = "∞" if stock == -1 else str(stock)
 
-            embed = discord.Embed(
-                title="💰 Vente réussie",
-                description=f"Vous avez vendu {quantity}x {name} pour {sell_price} pièces.",
-                color=discord.Color.green()
-            )
-            await interaction.response.send_message(embed=embed)
+        embed = discord.Embed(title=f"🔎 Infos sur l'item : {name}", color=discord.Color.purple())
+        embed.add_field(name="ID", value=f"{item_id}", inline=True)
+        embed.add_field(name="Prix", value=f"{price} pièces", inline=True)
+        embed.add_field(name="Stock", value=stock_display, inline=True)
+        embed.add_field(name="État", value="✅ Actif" if active == 1 else "❌ Inactif", inline=True)
+        embed.add_field(name="Description", value=description, inline=False)
 
-        except Exception as e:
-            await interaction.response.send_message(
-                embed=discord.Embed(
-                    title="❌ Erreur lors de la vente",
-                    description="Une erreur est survenue, veuillez réessayer.",
-                    color=discord.Color.red()
-                ),
-                ephemeral=True
-            )
-            print(f"Erreur vente: {e}")
+        await interaction.response.send_message(embed=embed)
+        
+    @app_commands.command(name="remove_item", description="Supprimer un item du shop (admin uniquement)")
+    @app_commands.default_permissions(administrator=True)
+    @app_commands.describe(item_id="L'ID de l'item à supprimer")
+    async def remove_item(self, interaction: discord.Interaction, item_id: int):
+        success = database.remove_item(item_id)
+        if success:
+            await interaction.response.send_message(embed=discord.Embed(
+                title="🗑️ Item Supprimé", 
+                description=f"Item ID {item_id} supprimé (désactivé).", 
+                color=discord.Color.red()
+            ))
+        else:
+            await interaction.response.send_message(embed=discord.Embed(
+                title="❌ Erreur", 
+                description="L'item n'a pas pu être supprimé.", 
+                color=discord.Color.red()
+            ))
 
-    # Commandes admin
-    @app_commands.command(name="add_item", description="[ADMIN] Ajouter un article à un magasin")
+    @app_commands.command(name="reactivate_item", description="Réactiver un item inactif (Admin seulement)")
     @app_commands.default_permissions(administrator=True)
     @app_commands.describe(
-        shop_id="ID du magasin",
-        name="Nom de l'article",
-        price="Prix de l'article",
-        stock="Stock initial (-1 pour illimité)",
-        description="Description de l'article"
+        item_id="L'ID de l'item à réactiver",
+        stock="Le nouveau stock (optionnel)"
     )
-    async def add_item(
-        self,
-        interaction: discord.Interaction,
-        shop_id: int,
-        name: str,
-        price: app_commands.Range[int, 1],
-        stock: int = -1,
-        description: str = ""
-    ):
-        """Ajouter un item à un shop (admin)"""
-        try:
-            item_id = database.add_item_to_shop(shop_id, name, price, description, stock)
-            embed = discord.Embed(
-                title="✅ Article ajouté",
-                description=f"L'article {name} a été ajouté au magasin #{shop_id}",
-                color=discord.Color.green()
-            )
-            embed.add_field(name="ID", value=str(item_id))
-            embed.add_field(name="Prix", value=f"{price} pièces")
-            embed.add_field(name="Stock", value="∞" if stock == -1 else str(stock))
-            await interaction.response.send_message(embed=embed)
-        except Exception as e:
-            await interaction.response.send_message(
-                embed=discord.Embed(
-                    title="❌ Erreur",
-                    description=f"Impossible d'ajouter l'article: {str(e)}",
-                    color=discord.Color.red()
-                ),
-                ephemeral=True
-            )
+    async def reactivate_item(self, interaction: discord.Interaction, item_id: int, stock: int = None):
+        item = database.get_item_by_id(item_id)
+        if not item:
+            await interaction.response.send_message(embed=discord.Embed(
+                title="❌ Erreur", 
+                description=f"Aucun item trouvé avec l'ID {item_id}.", 
+                color=discord.Color.red()
+            ))
+            return
+
+        database.reactivate_item(item_id, stock)
+        stock_msg = f"avec un stock de **{stock}**" if stock is not None else "sans modification de stock"
+        embed = discord.Embed(
+            title="✅ Item réactivé", 
+            description=f"L'item **{item[1]}** a été réactivé {stock_msg}.", 
+            color=discord.Color.green()
+        )
+        await interaction.response.send_message(embed=embed)
 
 async def setup(bot):
     await bot.add_cog(Shop(bot))
-    print("✅ Module Shop chargé")
