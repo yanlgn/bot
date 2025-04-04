@@ -1,4 +1,5 @@
 import discord
+from discord import app_commands
 from discord.ext import commands
 import database
 
@@ -6,32 +7,28 @@ class Inventory(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
-    @commands.command()
-    async def inventaire(self, ctx):
-        """Affiche l'inventaire de l'utilisateur."""
+    @app_commands.command(name="inventaire", description="Affiche ton inventaire")
+    async def inventaire(self, interaction: discord.Interaction):
+        """Affiche l'inventaire de l'utilisateur en utilisant une commande slash"""
         try:
-            # Récupère l'inventaire de l'utilisateur
-            inventory = database.get_user_inventory(ctx.author.id)
+            inventory = database.get_user_inventory(interaction.user.id)
             
-            # Si l'inventaire est vide
             if not inventory:
                 embed = discord.Embed(
                     title="📦 Inventaire",
                     description="Ton inventaire est vide.",
                     color=discord.Color.orange()
                 )
-                await ctx.send(embed=embed)
+                await interaction.response.send_message(embed=embed)
                 return
 
-            # Crée un embed pour afficher l'inventaire
             embed = discord.Embed(
-                title=f"📦 Inventaire de {ctx.author.display_name}",
+                title=f"📦 Inventaire de {interaction.user.display_name}",
                 color=discord.Color.gold()
             )
             
-            # Ajoute chaque item à l'embed
             for item in inventory:
-                if len(item) == 3:  # Vérifie que chaque item a 3 éléments (nom, quantité, shop)
+                if len(item) == 3:
                     item_name, quantity, shop_name = item
                     embed.add_field(
                         name=item_name,
@@ -44,35 +41,34 @@ class Inventory(commands.Cog):
                         description="Une erreur s'est produite : format d'inventaire invalide.",
                         color=discord.Color.red()
                     )
-                    await ctx.send(embed=embed)
+                    await interaction.response.send_message(embed=embed)
                     return
 
-            # Envoie l'embed
-            await ctx.send(embed=embed)
+            await interaction.response.send_message(embed=embed)
         except Exception as e:
             embed = discord.Embed(
                 title="❌ Erreur",
                 description=f"Une erreur s'est produite lors de l'affichage de l'inventaire : {str(e)}",
                 color=discord.Color.red()
             )
-            await ctx.send(embed=embed)
+            await interaction.response.send_message(embed=embed)
 
-    @commands.command()
-    @commands.has_permissions(administrator=True)
-    async def additem(self, ctx, member: discord.Member, item_name: str, quantity: int = 1):
-        """[ADMIN] Ajoute un item à l'inventaire d'un utilisateur."""
+    @app_commands.command(name="additem", description="[ADMIN] Ajoute un item à l'inventaire d'un utilisateur")
+    @app_commands.default_permissions(administrator=True)
+    @app_commands.describe(
+        member="Le membre à qui ajouter l'item",
+        item_name="Le nom de l'item à ajouter",
+        quantity="La quantité à ajouter (défaut: 1)"
+    )
+    async def additem(
+        self, 
+        interaction: discord.Interaction, 
+        member: discord.Member,
+        item_name: str,
+        quantity: app_commands.Range[int, 1] = 1
+    ):
+        """Commande slash pour ajouter un item à l'inventaire"""
         try:
-            # Vérifie que la quantité est valide
-            if quantity <= 0:
-                embed = discord.Embed(
-                    title="❌ Erreur",
-                    description="La quantité doit être supérieure à zéro.",
-                    color=discord.Color.red()
-                )
-                await ctx.send(embed=embed)
-                return
-
-            # Récupère l'item par son nom
             item_data = database.get_item_by_name(item_name)
             if not item_data:
                 embed = discord.Embed(
@@ -80,10 +76,9 @@ class Inventory(commands.Cog):
                     description=f"L'item **{item_name}** n'existe pas. Vérifie le nom de l'item.",
                     color=discord.Color.red()
                 )
-                await ctx.send(embed=embed)
+                await interaction.response.send_message(embed=embed)
                 return
 
-            # Récupère l'item_id (premier élément du tuple)
             item_id = item_data[0]
             if not isinstance(item_id, int):
                 embed = discord.Embed(
@@ -91,10 +86,9 @@ class Inventory(commands.Cog):
                     description="L'ID de l'item est invalide.",
                     color=discord.Color.red()
                 )
-                await ctx.send(embed=embed)
+                await interaction.response.send_message(embed=embed)
                 return
 
-            # Récupère les détails complets de l'item
             item_details = database.get_item_by_id(item_id)
             if not item_details:
                 embed = discord.Embed(
@@ -102,52 +96,41 @@ class Inventory(commands.Cog):
                     description=f"Les détails de l'item **{item_name}** n'ont pas pu être récupérés.",
                     color=discord.Color.red()
                 )
-                await ctx.send(embed=embed)
+                await interaction.response.send_message(embed=embed)
                 return
 
-            # Récupère le shop_id (cinquième élément du tuple)
             shop_id = item_details[1]
-            if not isinstance(shop_id, int):
-                embed = discord.Embed(
-                    title="❌ Erreur",
-                    description="L'ID du shop est invalide.",
-                    color=discord.Color.red()
-                )
-                await ctx.send(embed=embed)
-                return
-
-            # Ajoute l'item à l'inventaire
             database.add_user_item(member.id, shop_id, item_id, quantity)
             embed = discord.Embed(
                 title="✅ Item ajouté",
                 description=f"{quantity}x **{item_name}** ont été ajoutés à l'inventaire de {member.mention}.",
                 color=discord.Color.green()
             )
-            await ctx.send(embed=embed)
+            await interaction.response.send_message(embed=embed)
         except Exception as e:
             embed = discord.Embed(
                 title="❌ Erreur",
                 description=f"Une erreur s'est produite lors de l'ajout de l'item : {str(e)}",
                 color=discord.Color.red()
             )
-            await ctx.send(embed=embed)
+            await interaction.response.send_message(embed=embed)
 
-    @commands.command()
-    @commands.has_permissions(administrator=True)
-    async def removeitem(self, ctx, member: discord.Member, item_name: str, quantity: int = 1):
-        """[ADMIN] Retire un item de l'inventaire d'un utilisateur."""
+    @app_commands.command(name="removeitem", description="[ADMIN] Retire un item de l'inventaire d'un utilisateur")
+    @app_commands.default_permissions(administrator=True)
+    @app_commands.describe(
+        member="Le membre à qui retirer l'item",
+        item_name="Le nom de l'item à retirer",
+        quantity="La quantité à retirer (défaut: 1)"
+    )
+    async def removeitem(
+        self, 
+        interaction: discord.Interaction, 
+        member: discord.Member,
+        item_name: str,
+        quantity: app_commands.Range[int, 1] = 1
+    ):
+        """Commande slash pour retirer un item de l'inventaire"""
         try:
-            # Vérifie que la quantité est valide
-            if quantity <= 0:
-                embed = discord.Embed(
-                    title="❌ Erreur",
-                    description="La quantité doit être supérieure à zéro.",
-                    color=discord.Color.red()
-                )
-                await ctx.send(embed=embed)
-                return
-
-            # Récupère l'item par son nom
             item_data = database.get_item_by_name(item_name)
             if not item_data:
                 embed = discord.Embed(
@@ -155,21 +138,10 @@ class Inventory(commands.Cog):
                     description=f"L'item **{item_name}** n'existe pas. Vérifie le nom de l'item.",
                     color=discord.Color.red()
                 )
-                await ctx.send(embed=embed)
+                await interaction.response.send_message(embed=embed)
                 return
 
-            # Récupère l'item_id (premier élément du tuple)
             item_id = item_data[0]
-            if not isinstance(item_id, int):
-                embed = discord.Embed(
-                    title="❌ Erreur",
-                    description="L'ID de l'item est invalide.",
-                    color=discord.Color.red()
-                )
-                await ctx.send(embed=embed)
-                return
-
-            # Récupère les détails complets de l'item
             item_details = database.get_item_by_id(item_id)
             if not item_details:
                 embed = discord.Embed(
@@ -177,35 +149,24 @@ class Inventory(commands.Cog):
                     description=f"Les détails de l'item **{item_name}** n'ont pas pu être récupérés.",
                     color=discord.Color.red()
                 )
-                await ctx.send(embed=embed)
+                await interaction.response.send_message(embed=embed)
                 return
 
-            # Récupère le shop_id (cinquième élément du tuple)
             shop_id = item_details[1]
-            if not isinstance(shop_id, int):
-                embed = discord.Embed(
-                    title="❌ Erreur",
-                    description="L'ID du shop est invalide.",
-                    color=discord.Color.red()
-                )
-                await ctx.send(embed=embed)
-                return
-
-            # Retire l'item de l'inventaire
             database.remove_user_item(member.id, shop_id, item_id, quantity)
             embed = discord.Embed(
                 title="✅ Item retiré",
                 description=f"{quantity}x **{item_name}** ont été retirés de l'inventaire de {member.mention}.",
                 color=discord.Color.green()
             )
-            await ctx.send(embed=embed)
+            await interaction.response.send_message(embed=embed)
         except Exception as e:
             embed = discord.Embed(
                 title="❌ Erreur",
                 description=f"Une erreur s'est produite lors de la suppression de l'item : {str(e)}",
                 color=discord.Color.red()
             )
-            await ctx.send(embed=embed)
+            await interaction.response.send_message(embed=embed)
 
 async def setup(bot):
     await bot.add_cog(Inventory(bot))
