@@ -9,83 +9,91 @@ class Shop(commands.Cog):
         self.bot = bot
 
     async def send_paginated(self, ctx, data, title, color, items_per_page=5, sort_by_id=False):
-        if not data:
-            embed = discord.Embed(title=title, description="Aucun élément trouvé.", color=color)
-            return await ctx.send(embed=embed)
+    if not data:
+        embed = discord.Embed(title=title, description="Aucun élément trouvé.", color=color)
+        return await ctx.send(embed=embed)
+    
+    # Tri par ID si demandé
+    if sort_by_id and len(data) > 0:
+        data = sorted(data, key=lambda x: x[0])  # x[0] = ID
+    
+    pages = []
+    for i in range(0, len(data), items_per_page):
+        page_data = data[i:i + items_per_page]
+        embed = discord.Embed(
+            title=f"{title} (Page {i//items_per_page + 1}/{(len(data)-1)//items_per_page + 1})", 
+            color=color
+        )
         
-        # Tri par ID si demandé
-        if sort_by_id and len(data) > 0:
-            data = sorted(data, key=lambda x: x[0])  # x[0] = ID
+        if sort_by_id:
+            embed.set_footer(text="Trié par ID")
         
-        pages = []
-        for i in range(0, len(data), items_per_page):
-            page_data = data[i:i + items_per_page]
-            embed = discord.Embed(
-                title=f"{title} (Page {i//items_per_page + 1}/{(len(data)-1)//items_per_page + 1})", 
-                color=color
-            )
-            
-            if sort_by_id:
-                embed.set_footer(text="Trié par ID")
-            
-            for index, item in enumerate(page_data, start=i+1):
-                if len(item) == 3:  # Format shop
-                    shop_id, name, description = item
-                    embed.add_field(
-                        name=f"{index}. {name} (ID: {shop_id})",
-                        value=f"📖 {description[:150] + '...' if len(description) > 150 else description}",
-                        inline=False
-                    )
-                elif len(item) >= 5:  # Format item
-                    item_id, name, price, description, stock = item[:5]
-                    stock_display = "∞" if stock == -1 else str(stock)
-                    embed.add_field(
-                        name=f"{index}. {name} (ID: {item_id})",
-                        value=f"💰 Prix: {price} pièces\n📖 {description[:150] + '...' if len(description) > 150 else description}\n📦 Stock: {stock_display}",
-                        inline=False
-                    )
-            
-            pages.append(embed)
+        for index, item in enumerate(page_data, start=i+1):
+            if len(item) == 3:  # Format shop
+                shop_id, name, description = item
+                embed.add_field(
+                    name=f"{index}. {name} (ID: {shop_id})",
+                    value=f"📖 {description[:150] + '...' if len(description) > 150 else description}",
+                    inline=False
+                )
+            elif len(item) >= 5:  # Format item
+                item_id, name, price, description, stock = item[:5]
+                stock_display = "∞" if stock == -1 else str(stock)
+                embed.add_field(
+                    name=f"{index}. {name} (ID: {item_id})",
+                    value=f"💰 Prix: {price} pièces\n📖 {description[:150] + '...' if len(description) > 150 else description}\n📦 Stock: {stock_display}",
+                    inline=False
+                )
         
-        current_page = 0
-        view = View(timeout=60)
-        
-        previous_button = Button(emoji="⬅️", style=discord.ButtonStyle.blurple, disabled=True)
-        next_button = Button(emoji="➡️", style=discord.ButtonStyle.blurple)
-        
-        async def button_callback(interaction):
-            nonlocal current_page
-            
-            if interaction.user != ctx.author:
-                return await interaction.response.send_message("Seul l'auteur peut interagir.", ephemeral=True)
-            
-            if interaction.custom_id == "previous":
-                current_page -= 1
-            elif interaction.custom_id == "next":
-                current_page += 1
-            
-            previous_button.disabled = current_page == 0
-            next_button.disabled = current_page == len(pages) - 1
-            
-            await interaction.response.edit_message(
-                embed=pages[current_page],
-                view=view
-            )
-        
-        previous_button.custom_id = "previous"
-        next_button.custom_id = "next"
-        previous_button.callback = button_callback
-        next_button.callback = button_callback
-        
-        view.add_item(previous_button)
-        view.add_item(next_button)
-        
-        message = await ctx.send(embed=pages[current_page], view=view)
-        
-        async def on_timeout():
-            await message.edit(view=None)
-        
-        view.on_timeout = on_timeout
+        pages.append(embed)
+    
+    current_page = 0
+    view = View(timeout=60)
+    
+    # Bouton Précédent
+    previous_button = Button(
+        style=discord.ButtonStyle.blurple,
+        emoji="⬅️",
+        disabled=True
+    )
+    
+    # Bouton Suivant
+    next_button = Button(
+        style=discord.ButtonStyle.blurple,
+        emoji="➡️",
+        disabled=len(pages) <= 1
+    )
+    
+    async def previous_callback(interaction):
+        nonlocal current_page
+        if interaction.user != ctx.author:
+            return await interaction.response.send_message("Action non autorisée", ephemeral=True)
+        current_page -= 1
+        previous_button.disabled = current_page == 0
+        next_button.disabled = current_page == len(pages) - 1
+        await interaction.response.edit_message(embed=pages[current_page], view=view)
+    
+    async def next_callback(interaction):
+        nonlocal current_page
+        if interaction.user != ctx.author:
+            return await interaction.response.send_message("Action non autorisée", ephemeral=True)
+        current_page += 1
+        previous_button.disabled = current_page == 0
+        next_button.disabled = current_page == len(pages) - 1
+        await interaction.response.edit_message(embed=pages[current_page], view=view)
+    
+    previous_button.callback = previous_callback
+    next_button.callback = next_callback
+    
+    view.add_item(previous_button)
+    view.add_item(next_button)
+    
+    message = await ctx.send(embed=pages[current_page], view=view)
+    
+    async def on_timeout():
+        await message.edit(view=None)
+    
+    view.on_timeout = on_timeout
 
     @commands.command()
     async def shops(self, ctx):
