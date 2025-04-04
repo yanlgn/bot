@@ -257,7 +257,7 @@ class Shop(commands.Cog):
             color=discord.Color.blue()
         ))
         
-@commands.command()
+    @commands.command()
 async def items_list(self, ctx):
     """[Admin] Liste paginée de tous les items (triés par ID)"""
     if not ctx.author.guild_permissions.administrator:
