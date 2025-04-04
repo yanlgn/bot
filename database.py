@@ -113,16 +113,33 @@ def delete_shop(shop_id):
 def add_item_to_shop(shop_id, name, price, description="", stock=-1):
     conn = connect_db()
     cursor = conn.cursor()
+    
+    # Vérifier si l'item existe déjà dans ce shop
     cursor.execute("""
-        INSERT INTO items (shop_id, name, price, description, stock, active)
-        VALUES (%s, %s, %s, %s, %s, 1)
+        SELECT item_id FROM items 
+        WHERE shop_id = %s AND name = %s
+    """, (shop_id, name))
+    existing_item = cursor.fetchone()
+    
+    if existing_item:
+        conn.close()
+        raise ValueError(f"Un item avec le nom '{name}' existe déjà dans ce shop (ID: {existing_item[0]})")
+
+    # Générer un nouvel ID unique en trouvant le maximum actuel +1
+    cursor.execute("SELECT COALESCE(MAX(item_id), 0) + 1 FROM items")
+    new_item_id = cursor.fetchone()[0]
+    
+    # Insérer le nouvel item avec l'ID généré
+    cursor.execute("""
+        INSERT INTO items (item_id, shop_id, name, price, description, stock, active)
+        VALUES (%s, %s, %s, %s, %s, %s, 1)
         RETURNING item_id
-    """, (shop_id, name, price, description, stock))
+    """, (new_item_id, shop_id, name, price, description, stock))
+    
     item_id = cursor.fetchone()[0]
     conn.commit()
     conn.close()
     return item_id
-
 def remove_item(item_id):
     conn = connect_db()
     cursor = conn.cursor()
