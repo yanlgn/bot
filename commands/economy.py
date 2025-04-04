@@ -136,6 +136,7 @@ class Economy(commands.Cog):
             )
             await interaction.response.send_message(embed=embed)
             return
+        
         if montant <= 0:
             embed = discord.Embed(
                 title="❌ Erreur",
@@ -144,21 +145,46 @@ class Economy(commands.Cog):
             )
             await interaction.response.send_message(embed=embed)
             return
-        if database.transfer_money(interaction.user.id, membre.id, montant):
+        
+        try:
+            # On vérifie d'abord si l'utilisateur a assez d'argent
+            balance = database.get_balance(interaction.user.id)
+            if balance < montant:
+                embed = discord.Embed(
+                    title="❌ Erreur",
+                    description="Tu n'as pas assez d'argent dans ton portefeuille.",
+                    color=discord.Color.red()
+                )
+                await interaction.response.send_message(embed=embed)
+                return
+            
+            # Si tout est bon, on effectue le transfert
+            success = database.transfer_money(interaction.user.id, membre.id, montant)
+            
+            if not success:
+                embed = discord.Embed(
+                    title="❌ Erreur",
+                    description="Le transfert a échoué.",
+                    color=discord.Color.red()
+                )
+                await interaction.response.send_message(embed=embed)
+                return
+            
             embed = discord.Embed(
                 title="✅ Paiement réussi",
                 description=f"Tu as payé **{montant}** pièces à {membre.display_name}.",
                 color=discord.Color.green()
             )
             await interaction.response.send_message(embed=embed)
-        else:
+            
+        except Exception as e:
             embed = discord.Embed(
-                title="❌ Erreur",
-                description="Tu n'as pas assez d'argent dans ton portefeuille.",
+                title="❌ Erreur inattendue",
+                description=f"Une erreur s'est produite : {str(e)}",
                 color=discord.Color.red()
             )
             await interaction.response.send_message(embed=embed)
-
+            
     @app_commands.command(name="setbalance", description="[ADMIN] Change le solde d'un utilisateur")
     @app_commands.default_permissions(administrator=True)
     @app_commands.describe(membre="Le membre dont vous voulez modifier le solde", montant="Le nouveau solde")
