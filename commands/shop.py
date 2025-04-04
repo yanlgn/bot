@@ -13,16 +13,23 @@ class Shop(commands.Cog):
             embed = discord.Embed(title=title, description="Aucun élément trouvé.", color=color)
             return await ctx.send(embed=embed)
         
+        # Tri automatique par prix pour les items (si la structure contient un prix)
+        if len(data) > 0 and len(data[0]) >= 5:  # Si ce sont des items (avec prix)
+            data = sorted(data, key=lambda x: x[2])  # Tri par prix (x[2] = prix)
+        
         pages = []
         for i in range(0, len(data), items_per_page):
             page_data = data[i:i + items_per_page]
-            embed = discord.Embed(title=f"{title} (Page {i//items_per_page + 1}/{(len(data)-1)//items_per_page + 1})", color=color)
+            embed = discord.Embed(
+                title=f"{title} - Tri par prix (Page {i//items_per_page + 1}/{(len(data)-1)//items_per_page + 1})", 
+                color=color
+            )
             
-            for item in page_data:
+            for index, item in enumerate(page_data, start=i+1):  # Numérotation globale
                 if len(item) == 3:  # Format shop
                     shop_id, name, description = item
                     embed.add_field(
-                        name=f"{name} (ID: {shop_id})",
+                        name=f"{index}. {name} (ID: {shop_id})",
                         value=f"📖 {description[:150] + '...' if len(description) > 150 else description}",
                         inline=False
                     )
@@ -30,8 +37,8 @@ class Shop(commands.Cog):
                     item_id, name, price, description, stock = item[:5]
                     stock_display = "∞" if stock == -1 else str(stock)
                     embed.add_field(
-                        name=f"{name} (ID: {item_id})",
-                        value=f"💰 Prix: {price}\n📖 {description[:150] + '...' if len(description) > 150 else description}\n📦 Stock: {stock_display}",
+                        name=f"{index}. {name} (ID: {item_id})",
+                        value=f"💰 Prix: {price} pièces\n📖 {description[:150] + '...' if len(description) > 150 else description}\n📦 Stock: {stock_display}",
                         inline=False
                     )
             
@@ -41,23 +48,20 @@ class Shop(commands.Cog):
         message = await ctx.send(embed=pages[current_page])
         
         if len(pages) > 1:
-            # Création des boutons
             previous_button = Button(emoji="⬅️", style=discord.ButtonStyle.blurple)
             next_button = Button(emoji="➡️", style=discord.ButtonStyle.blurple)
             
-            # Création de la vue
             view = View(timeout=60)
             view.add_item(previous_button)
             view.add_item(next_button)
             
             await message.edit(view=view)
             
-            # Gestion des interactions
             async def button_callback(interaction):
                 nonlocal current_page
                 
                 if interaction.user != ctx.author:
-                    return await interaction.response.send_message("Seul l'auteur de la commande peut interagir.", ephemeral=True)
+                    return await interaction.response.send_message("Seul l'auteur peut interagir.", ephemeral=True)
                 
                 if interaction.component == previous_button:
                     current_page = max(0, current_page - 1)
@@ -69,7 +73,6 @@ class Shop(commands.Cog):
             previous_button.callback = button_callback
             next_button.callback = button_callback
             
-            # Timeout
             async def on_timeout():
                 await message.edit(view=None)
             
@@ -77,13 +80,13 @@ class Shop(commands.Cog):
 
     @commands.command()
     async def shops(self, ctx):
-        """Liste tous les shops avec pagination"""
+        """Liste tous les shops (non triés)"""
         shops = database.get_shops()
         await self.send_paginated(ctx, shops, "🏪 Liste des Shops", discord.Color.blue())
 
     @commands.command()
     async def shop(self, ctx, shop_id: int):
-        """Affiche les items d'un shop avec pagination"""
+        """Affiche les items d'un shop (triés par prix)"""
         items = database.get_shop_items(shop_id)
         await self.send_paginated(ctx, items, f"🛍️ Items du Shop {shop_id}", discord.Color.green())
 
@@ -252,6 +255,57 @@ class Shop(commands.Cog):
             description=f"{ctx.author.mention} a vendu {quantity}x **{name}** pour **{total_earned}** pièces.",
             color=discord.Color.blue()
         ))
+    @commands.command()
+    async def items_list(self, ctx):
+        """[Admin uniquement] Liste complète de tous les items existants, actifs et inactifs."""
+        if not ctx.author.guild_permissions.administrator:
+            await ctx.send(embed=discord.Embed(title="❌ Permission refusée", description="Tu n'as pas la permission de consulter cette liste.", color=discord.Color.red()))
+            return
+
+        items = database.get_all_items()
+        if not items:
+            embed = discord.Embed(title="📜 Liste d'Items", description="Aucun item enregistré.", color=discord.Color.orange())
+            await ctx.send(embed=embed)
+            return
+
+        embed = discord.Embed(title="📜 Tous les Items", color=discord.Color.blue())
+        for item in items:
+            status = "✅ Actif" if item[6] == 1 else "❌ Inactif"
+            stock_display = "∞" if item[5] == -1 else str(item[5])
+            embed.add_field(name=f"{item[1]} (ID {item[0]})", value=f"Prix : {item[2]} | Stock : {stock_display} | {status}", inline=False)
+
+        await ctx.send(embed=embed)
+    @commands.command()
+    async def item_info(self, ctx, *, name: str):
+        """Afficher les informations détaillées d’un item par son nom."""
+        item = database.get_item_by_name(name)
+        if not item:
+            await ctx.send(embed=discord.Embed(title="❌ Introuvable", description=f"Aucun item nommé **{name}**.", color=discord.Color.red()))
+            return
+
+        item_id, name, price, description, stock, active = item[0], item[1], item[2], item[3], item[4], item[5]
+        stock_display = "∞" if stock == -1 else str(stock)
+
+        embed = discord.Embed(title=f"🔎 Infos sur l'item : {name}", color=discord.Color.purple())
+        embed.add_field(name="ID", value=f"{item_id}", inline=True)
+        embed.add_field(name="Prix", value=f"{price} pièces", inline=True)
+        embed.add_field(name="Stock", value=stock_display, inline=True)
+        embed.add_field(name="État", value="✅ Actif" if active == 1 else "❌ Inactif", inline=True)
+        embed.add_field(name="Description", value=description, inline=False)
+
+        await ctx.send(embed=embed)
+    @commands.command()
+    async def remove_item(self, ctx, item_id: int):
+        """Supprimer un item du shop (admin uniquement)."""
+        if not ctx.author.guild_permissions.administrator:
+            await ctx.send(embed=discord.Embed(title="❌ Permission refusée", description="Tu n'as pas la permission de supprimer un item.", color=discord.Color.red()))
+            return
+
+        success = database.remove_item(item_id)
+        if success:
+            await ctx.send(embed=discord.Embed(title="🗑️ Item Supprimé", description=f"Item ID {item_id} supprimé (désactivé).", color=discord.Color.red()))
+        else:
+            await ctx.send(embed=discord.Embed(title="❌ Erreur", description="L'item n'a pas pu être supprimé.", color=discord.Color.red()))
 
 async def setup(bot):
     await bot.add_cog(Shop(bot))
