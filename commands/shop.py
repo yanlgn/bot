@@ -257,27 +257,92 @@ class Shop(commands.Cog):
             color=discord.Color.blue()
         ))
         
-    @commands.command()
-    async def items_list(self, ctx):
-        """[Admin uniquement] Liste complète de tous les items existants, actifs et inactifs."""
-        if not ctx.author.guild_permissions.administrator:
-            await ctx.send(embed=discord.Embed(title="❌ Permission refusée", description="Tu n'as pas la permission de consulter cette liste.", color=discord.Color.red()))
-            return
+@commands.command()
+async def items_list(self, ctx):
+    """[Admin] Liste paginée de tous les items (triés par ID)"""
+    if not ctx.author.guild_permissions.administrator:
+        await ctx.send(embed=discord.Embed(
+            title="❌ Permission refusée",
+            description="Tu n'as pas la permission de consulter cette liste.",
+            color=discord.Color.red()
+        ))
+        return
 
-        items = database.get_all_items()
-        if not items:
-            embed = discord.Embed(title="📜 Liste d'Items", description="Aucun item enregistré.", color=discord.Color.orange())
-            await ctx.send(embed=embed)
-            return
+    items = database.get_all_items()
+    if not items:
+        return await ctx.send(embed=discord.Embed(
+            title="📜 Liste d'Items",
+            description="Aucun item enregistré.",
+            color=discord.Color.orange()
+        ))
 
-        embed = discord.Embed(title="📜 Tous les Items", color=discord.Color.blue())
-        for item in items:
-            status = "✅ Actif" if item[6] == 1 else "❌ Inactif"
-            stock_display = "∞" if item[5] == -1 else str(item[5])
-            embed.add_field(name=f"{item[1]} (ID {item[0]})", value=f"Prix : {item[2]} | Stock : {stock_display} | {status}", inline=False)
+    # Tri des items par ID (croissant)
+    items = sorted(items, key=lambda x: x[0])  # x[0] = ID
 
-        await ctx.send(embed=embed)
+    pages = []
+    items_per_page = 5
+    
+    for i in range(0, len(items), items_per_page):
+        page_items = items[i:i + items_per_page]
+        embed = discord.Embed(
+            title=f"📜 Tous les Items (Page {i//items_per_page + 1}/{(len(items)-1)//items_per_page + 1})",
+            description="Triés par ID",
+            color=discord.Color.blue()
+        )
         
+        for item in page_items:
+            item_id, name, price, _, _, stock, active = item
+            status = "✅ Actif" if active == 1 else "❌ Inactif"
+            stock_display = "∞" if stock == -1 else str(stock)
+            
+            embed.add_field(
+                name=f"ID {item_id} - {name}",
+                value=f"💰 Prix: {price} pièces | 📦 Stock: {stock_display} | {status}",
+                inline=False
+            )
+        
+        pages.append(embed)
+
+    current_page = 0
+    message = await ctx.send(embed=pages[current_page])
+    
+    if len(pages) > 1:
+        previous_button = Button(emoji="⬅️", style=discord.ButtonStyle.blurple, disabled=True)
+        next_button = Button(emoji="➡️", style=discord.ButtonStyle.blurple)
+        
+        view = View(timeout=60)
+        view.add_item(previous_button)
+        view.add_item(next_button)
+        
+        await message.edit(view=view)
+        
+        async def button_callback(interaction):
+            nonlocal current_page
+            
+            if interaction.user != ctx.author:
+                return await interaction.response.send_message("Action réservée à l'auteur", ephemeral=True)
+            
+            if interaction.component == previous_button:
+                current_page -= 1
+            elif interaction.component == next_button:
+                current_page += 1
+            
+            previous_button.disabled = current_page == 0
+            next_button.disabled = current_page == len(pages) - 1
+            
+            await interaction.response.edit_message(
+                embed=pages[current_page],
+                view=view
+            )
+        
+        previous_button.callback = button_callback
+        next_button.callback = button_callback
+        
+        async def on_timeout():
+            await message.edit(view=None)
+        
+        view.on_timeout = on_timeout
+    
     @commands.command()
     async def item_info(self, ctx, *, name: str):
         """Afficher les informations détaillées d’un item par son nom."""
