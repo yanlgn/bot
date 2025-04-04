@@ -337,6 +337,41 @@ class Shop(commands.Cog):
             color=discord.Color.green()
         )
         await interaction.response.send_message(embed=embed)
+    @app_commands.command(name="items_list", description="[ADMIN] Liste tous les items du système triés par ID")
+    @app_commands.default_permissions(administrator=True)
+    async def items_list(self, interaction: discord.Interaction):
+        """Affiche tous les items du système (admin seulement)"""
+        try:
+            all_items = database.get_all_items()
+            
+            if not all_items:
+                return await interaction.response.send_message(
+                    embed=discord.Embed(
+                        title="📦 Liste des items",
+                        description="Aucun item trouvé dans la base de données.",
+                        color=discord.Color.orange()
+                    ),
+                    ephemeral=True
+                )
+            
+            await self.send_paginated(
+                interaction=interaction,
+                data=all_items,
+                title="📦 Tous les items (Admin) - Tri par ID",
+                color=discord.Color.purple(),
+                items_per_page=5
+            )
+            
+        except Exception as e:
+            await interaction.response.send_message(
+                embed=discord.Embed(
+                    title="❌ Erreur",
+                    description=f"Une erreur est survenue : {str(e)}",
+                    color=discord.Color.red()
+                ),
+                ephemeral=True
+            )
+            print(f"Erreur dans items_list: {e}")
 
 async def setup(bot):
     await bot.add_cog(Shop(bot))
