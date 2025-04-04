@@ -11,8 +11,9 @@ class Shop(commands.Cog):
         self.active_paginators = {}
 
     class PaginatorView(View):
-        def __init__(self, pages, timeout=60):
+        def __init__(self, author_id, pages, timeout=60):
             super().__init__(timeout=timeout)
+            self.author_id = author_id
             self.pages = pages
             self.current_page = 0
             self.message = None
@@ -33,7 +34,7 @@ class Shop(commands.Cog):
             self.next_button.disabled = self.current_page == len(self.pages) - 1
 
         async def previous_page(self, interaction: discord.Interaction):
-            if interaction.user != self.message.interaction.user:
+            if interaction.user.id != self.author_id:
                 return await interaction.response.send_message("Seul l'auteur peut interagir.", ephemeral=True)
             
             self.current_page = max(0, self.current_page - 1)
@@ -41,12 +42,21 @@ class Shop(commands.Cog):
             await interaction.response.edit_message(embed=self.pages[self.current_page], view=self)
 
         async def next_page(self, interaction: discord.Interaction):
-            if interaction.user != self.message.interaction.user:
+            if interaction.user.id != self.author_id:
                 return await interaction.response.send_message("Seul l'auteur peut interagir.", ephemeral=True)
             
             self.current_page = min(len(self.pages) - 1, self.current_page + 1)
             self.update_buttons()
             await interaction.response.edit_message(embed=self.pages[self.current_page], view=self)
+
+        async def on_timeout(self):
+            # Désactive les boutons quand le timeout est atteint
+            for item in self.children:
+                item.disabled = True
+            try:
+                await self.message.edit(view=self)
+            except:
+                pass
 
     async def send_paginated(self, interaction: discord.Interaction, data, title: str, color: discord.Color, items_per_page: int = 5):
         """Envoie un message paginé avec les données"""
@@ -65,9 +75,11 @@ class Shop(commands.Cog):
             data = sorted(data, key=lambda x: x[2])  # x[2] = prix
 
         pages = []
+        total_pages = ((len(data) - 1) // items_per_page) + 1
+        
         for i in range(0, len(data), items_per_page):
             embed = discord.Embed(
-                title=f"{title} - Page {i//items_per_page + 1}/{(len(data)-1)//items_per_page + 1}",
+                title=f"{title} - Page {i//items_per_page + 1}/{total_pages}",
                 color=color
             )
             
@@ -93,7 +105,7 @@ class Shop(commands.Cog):
         if len(pages) == 1:
             return await interaction.response.send_message(embed=pages[0])
         
-        view = self.PaginatorView(pages)
+        view = self.PaginatorView(interaction.user.id, pages)
         await interaction.response.send_message(embed=pages[0], view=view)
         view.message = await interaction.original_response()
 
