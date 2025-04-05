@@ -5,20 +5,34 @@ import asyncio
 from dotenv import load_dotenv
 from flask import Flask
 from threading import Thread
+import logging
+
+# Configuration du logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s | %(levelname)s | %(message)s',
+    datefmt='%Y-%m-%d %H:%M:%S'
+)
+logger = logging.getLogger(__name__)
 
 # Charger les variables d'environnement
 load_dotenv(dotenv_path='token.env')
 TOKEN = os.getenv('DISCORD_TOKEN')
+PORT = int(os.getenv('PORT', 8080))  # Port par défaut pour Render
 
-# Configuration du bot avec les intents nécessaires
+# Configuration des intents
 intents = discord.Intents.default()
-intents.message_content = True  # Nécessaire pour les commandes
-intents.members = True  # Pour les commandes avec mentions
+intents.message_content = True
+intents.members = True
 
 bot = commands.Bot(
-    command_prefix="!", 
+    command_prefix="!",
     intents=intents,
-    help_command=None
+    help_command=None,
+    activity=discord.Activity(
+        type=discord.ActivityType.watching,
+        name="vos commandes"
+    )
 )
 
 async def load_extensions():
@@ -30,40 +44,27 @@ async def load_extensions():
         if filename.endswith(".py") and not filename.startswith("_"):
             try:
                 await bot.load_extension(f"commands.{filename[:-3]}")
-                loaded.append(filename)
+                loaded.append(filename[:-3])  # Retire l'extension .py
             except Exception as e:
-                failed.append((filename, str(e)))
+                failed.append((filename[:-3], str(e)))
+                logger.error(f"Erreur chargement {filename}: {e}")
     
-    print("\n--- Chargement des extensions ---")
-    for file in loaded:
-        print(f"✅ {file}")
-    
-    for file, error in failed:
-        print(f"❌ {file}: {error}")
-    
-    return len(loaded), len(failed)
+    logger.info(f"Extensions chargées: {len(loaded)}, échecs: {len(failed)}")
+    return loaded, failed
 
 @bot.event
 async def on_ready():
     """Événement déclenché quand le bot est prêt"""
-    print(f"\n✅ Connecté en tant que {bot.user} (ID: {bot.user.id})")
-    print("----------------------------------")
+    logger.info(f"Connecté en tant que {bot.user} (ID: {bot.user.id})")
     
-    # Charge les extensions
     loaded, failed = await load_extensions()
     
-    # Synchronise les commandes slash
+    # Synchronisation des commandes slash
     try:
         synced = await bot.tree.sync()
-        print(f"\n🔵 {len(synced)} commandes slash synchronisées")
-        
-        # Affiche les commandes synchronisées pour debug
-        for cmd in synced:
-            print(f"- {cmd.name}")
+        logger.info(f"{len(synced)} commandes slash synchronisées")
     except Exception as e:
-        print(f"\n❌ Erreur de synchronisation: {e}")
-    
-    print("\n🔵 Bot prêt à être utilisé")
+        logger.error(f"Erreur synchronisation: {e}")
 
 @bot.command()
 @commands.is_owner()
@@ -72,30 +73,41 @@ async def sync(ctx):
     try:
         synced = await bot.tree.sync()
         await ctx.send(f"✅ {len(synced)} commandes synchronisées")
+        logger.info(f"Sync manuel: {len(synced)} commandes")
     except Exception as e:
         await ctx.send(f"❌ Erreur: {str(e)}")
+        logger.error(f"Erreur sync manuel: {e}")
 
 def run_flask():
-    """Lance le serveur Flask pour keep-alive"""
+    """Serveur web minimal pour keep-alive"""
     app = Flask(__name__)
     
     @app.route('/')
     def home():
-        return "Bot en ligne"
+        return "🤖 Bot Discord en ligne"
     
-    app.run(host='0.0.0.0', port=8080)
+    @app.route('/health')
+    def health():
+        return "OK", 200
+    
+    app.run(host='0.0.0.0', port=PORT)
 
 if __name__ == "__main__":
-    # Lancer Flask en production seulement
-    if os.getenv('ENV', 'development') == 'production':
-        Thread(target=run_flask).start()
-        print("🔵 Serveur Flask démarré en mode production")
-    
-    # Lancer le bot
+    # Démarrer Flask dans un thread séparé
+    flask_thread = Thread(
+        target=run_flask,
+        daemon=True  # Le thread s'arrêtera quand le main thread s'arrête
+    )
+    flask_thread.start()
+    logger.info(f"Serveur Flask démarré sur le port {PORT}")
+
+    # Démarrer le bot
     try:
-        print("\n🔵 Démarrage du bot...")
+        logger.info("Démarrage du bot Discord...")
         bot.run(TOKEN)
     except discord.LoginFailure:
-        print("❌ Erreur: Token Discord invalide")
+        logger.critical("Token Discord invalide")
     except Exception as e:
-        print(f"❌ Erreur critique: {str(e)}")
+        logger.critical(f"Erreur critique: {e}")
+    finally:
+        logger.info("Arrêt du bot")
