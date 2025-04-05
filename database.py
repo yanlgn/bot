@@ -235,12 +235,13 @@ def reactivate_item(item_id, stock=None):
     conn = connect_db()
     cursor = conn.cursor()
     if stock is not None:
-        cursor.execute("UPDATE items SET active = 1, stock = %s WHERE item_id = %s", (stock, item_id))
+        cursor.execute("UPDATE items SET active = 1, stock = %s WHERE item_id = %s RETURNING item_id", (stock, item_id))
     else:
-        cursor.execute("UPDATE items SET active = 1 WHERE item_id = %s", (item_id,))
+        cursor.execute("UPDATE items SET active = 1 WHERE item_id = %s RETURNING item_id", (item_id,))
+    result = cursor.fetchone()
     conn.commit()
     conn.close()
-
+    return result is not None
 # Gestion des utilisateurs et balances
 def get_balance(user_id):
     conn = connect_db()
