@@ -143,10 +143,11 @@ def add_item_to_shop(shop_id, name, price, description="", stock=-1):
 def remove_item(item_id):
     conn = connect_db()
     cursor = conn.cursor()
-    cursor.execute("UPDATE items SET active = 0 WHERE item_id = %s", (item_id,))
+    cursor.execute("UPDATE items SET active = 0 WHERE item_id = %s RETURNING item_id", (item_id,))
+    result = cursor.fetchone()
     conn.commit()
     conn.close()
-
+    return result is not None  # Retourne True si l'item a été trouvé et modifié
 def get_shop_items(shop_id):
     conn = connect_db()
     cursor = conn.cursor()
@@ -300,6 +301,7 @@ def transfer_money(from_user_id, to_user_id, amount):
 
         conn.commit()
         print(f"Transfert réussi : {amount} de {from_user_id} à {to_user_id}.")
+        return True  # Ajouter cette ligne
     except Exception as e:
         if conn:
             conn.rollback()
