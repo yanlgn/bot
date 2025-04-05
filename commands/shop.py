@@ -313,14 +313,11 @@ class Shop(commands.Cog):
                 color=discord.Color.red()
             ))
 
-    @app_commands.command(name="reactivate_item", description="Réactiver un item inactif (Admin seulement)")
+    @app_commands.command(name="remove_item", description="Supprimer un item du shop (admin uniquement)")
     @app_commands.default_permissions(administrator=True)
-    @app_commands.describe(
-        item_id="L'ID de l'item à réactiver",
-        stock="Le nouveau stock (optionnel)"
-    )
-    async def reactivate_item(self, interaction: discord.Interaction, item_id: int, stock: int = None):
-        item = database.get_item_by_id(item_id)
+    @app_commands.describe(item_id="L'ID de l'item à supprimer")
+    async def remove_item(self, interaction: discord.Interaction, item_id: int):
+        item = database.get_item_by_id(item_id)  # Vérifier d'abord si l'item existe
         if not item:
             await interaction.response.send_message(embed=discord.Embed(
                 title="❌ Erreur", 
@@ -329,14 +326,20 @@ class Shop(commands.Cog):
             ))
             return
 
-        database.reactivate_item(item_id, stock)
-        stock_msg = f"avec un stock de **{stock}**" if stock is not None else "sans modification de stock"
-        embed = discord.Embed(
-            title="✅ Item réactivé", 
-            description=f"L'item **{item[1]}** a été réactivé {stock_msg}.", 
-            color=discord.Color.green()
-        )
-        await interaction.response.send_message(embed=embed)
+        success = database.remove_item(item_id)
+        if success:
+            await interaction.response.send_message(embed=discord.Embed(
+                title="🗑️ Item Supprimé", 
+                description=f"Item **{item[1]}** (ID: {item_id}) a été désactivé.", 
+                color=discord.Color.red()
+            ))
+        else:
+            await interaction.response.send_message(embed=discord.Embed(
+                title="❌ Erreur", 
+                description="L'item n'a pas pu être supprimé.", 
+                color=discord.Color.red()
+            ))
+
     @app_commands.command(name="items_list", description="[ADMIN] Liste tous les items du système triés par ID")
     @app_commands.default_permissions(administrator=True)
     async def items_list(self, interaction: discord.Interaction):
