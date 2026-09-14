@@ -16,6 +16,7 @@ import hmac
 import os
 import secrets
 import time
+import urllib.error
 import urllib.parse
 import urllib.request
 import json as jsonlib
@@ -31,10 +32,10 @@ logger = __import__("logging").getLogger(__name__)
 # ---------------------------------------------------------------------------
 ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD") or ""
 ADMIN_IDS = [i.strip() for i in os.getenv("ADMIN_IDS", "").split(",") if i.strip()]
-CLIENT_ID = os.getenv("DISCORD_CLIENT_ID", "")
-CLIENT_SECRET = os.getenv("DISCORD_CLIENT_SECRET", "")
-REDIRECT_URI = os.getenv("DISCORD_REDIRECT_URI", "")
-SECRET_KEY = os.getenv("SECRET_KEY", "") or secrets.token_hex(32)
+CLIENT_ID = (os.getenv("DISCORD_CLIENT_ID") or "").strip()
+CLIENT_SECRET = (os.getenv("DISCORD_CLIENT_SECRET") or "").strip()
+REDIRECT_URI = (os.getenv("DISCORD_REDIRECT_URI") or "").strip()
+SECRET_KEY = (os.getenv("SECRET_KEY") or "").strip() or secrets.token_hex(32)
 
 AUTHORIZE_URL = "https://discord.com/oauth2/authorize"
 TOKEN_URL = "https://discord.com/api/oauth2/token"
@@ -53,6 +54,15 @@ def _perm_allows_guild(permissions):
     """Vrai si le bitfield contient ADMINISTRATOR ou MANAGE_GUILD."""
     perms = int(permissions or 0)
     return bool(perms & (PERM_ADMINISTRATOR | PERM_MANAGE_GUILD))
+
+
+def _http_error_detail(e):
+    """Extrait le corps JSON/texte renvoyé par Discord dans une HTTPError."""
+    try:
+        body = e.read().decode("utf-8", "replace")[:300]
+        return f" ({body})"
+    except Exception:
+        return ""
 
 
 def create_app(bot):
@@ -278,6 +288,9 @@ def create_app(bot):
                 token_data = jsonlib.loads(resp.read().decode())
 
             access_token = token_data["access_token"]
+        except urllib.error.HTTPError as e:
+            logger.exception("Échec échange token OAuth")
+            return render_template("login.html", error=f"Échec OAuth : {e}{_http_error_detail(e)}", csrf=csrf_token()), 502
         except Exception as e:
             logger.exception("Échec échange token OAuth")
             return render_template("login.html", error=f"Échec OAuth : {e}", csrf=csrf_token()), 502
@@ -291,6 +304,9 @@ def create_app(bot):
                 me = jsonlib.loads(resp.read().decode())
 
             user_guilds = fetch_user_guilds(access_token)
+        except urllib.error.HTTPError as e:
+            logger.exception("Échec récupération identité / serveurs Discord")
+            return render_template("login.html", error=f"Échec récupération identité : {e}{_http_error_detail(e)}", csrf=csrf_token()), 502
         except Exception as e:
             logger.exception("Échec récupération identité / serveurs Discord")
             return render_template("login.html", error=f"Échec récupération identité : {e}", csrf=csrf_token()), 502
