@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Bot Admin · Connexion</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body class="login-body">
+  <div class="login-card">
+    <div class="login-logo">🤖</div>
+    <h1>Bot Admin</h1>
+    <p class="login-sub">Espace réservé à l'administrateur du bot</p>
+
+    {% if discord_oauth %}
+    <a class="btn btn-discord" href="{{ url_for('discord_auth_start') }}">Connexion avec Discord</a>
+    <div class="separator"><span>ou</span></div>
+    {% endif %}
+
+    <form method="POST" action="/admin/login">
+      <input type="hidden" name="csrf" value="{{ csrf }}">
+      <input class="input" type="password" name="password" placeholder="Mot de passe" required autofocus>
+      <button class="btn btn-primary" type="submit">Se connecter</button>
+    </form>
+
+    {% if error %}<div class="error-box">{{ error }}</div>{% endif %}
+  </div>
+</body>
+</html>

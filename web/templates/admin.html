@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Bot Admin</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+  <meta name="csrf" content="{{ csrf }}">
+  <div class="layout">
+    <aside class="sidebar">
+      <div class="brand">🤖 Bot Admin</div>
+      <nav id="nav">
+        <a data-view="dashboard" class="active">📊 Dashboard</a>
+        <a data-view="users">👥 Utilisateurs</a>
+        <a data-view="shops">🏪 Shops</a>
+        <a data-view="items">📦 Items</a>
+        <a data-view="salaries">💰 Salaires</a>
+        <a data-view="transactions">🧾 Transactions</a>
+        <a data-view="audit">📜 Journal</a>
+      </nav>
+      <div class="sidebar-footer">
+        <span id="admin-name">{{ admin_name }}</span>
+        <form method="POST" action="/admin/logout">
+          <input type="hidden" name="csrf" value="{{ csrf }}">
+          <button class="btn btn-ghost">Déconnexion</button>
+        </form>
+      </div>
+    </aside>
+
+    <main class="content">
+      <header class="topbar" id="topbar"></header>
+      <section id="view" class="view"></section>
+    </main>
+  </div>
+
+  <div id="modal-root"></div>
+  <div id="toast-root"></div>
+  <script src="{{ url_for('static', filename='app.js') }}"></script>
+</body>
+</html>
