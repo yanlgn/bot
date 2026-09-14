@@ -16,6 +16,10 @@ async function api(path, options = {}) {
     window.location.href = "/admin/login";
     throw new Error("Session expirée");
   }
+  if (res.status === 428) {
+    window.location.href = "/admin/guilds";
+    throw new Error("Aucun serveur sélectionné");
+  }
   if (res.status === 403) {
     throw new Error("Jeton CSRF invalide");
   }

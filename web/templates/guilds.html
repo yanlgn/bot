@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Bot Admin · Choisir un serveur</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body class="login-body">
+  <div class="login-card guild-card">
+    <div class="login-logo">🌍</div>
+    <h1>Choisis ton serveur</h1>
+    <p class="login-sub">Serveurs où le bot est présent et où tu as les permissions</p>
+
+    {% if error %}
+      <div class="error-box">{{ error }}</div>
+    {% elif guilds %}
+      <div class="guild-grid">
+        {% for g in guilds %}
+        <button class="guild-card-btn" data-gid="{{ g.id }}">
+          {% if g.icon %}
+            <img class="guild-icon" src="{{ g.icon }}" alt="">
+          {% else %}
+            <div class="guild-icon guild-icon-placeholder">{{ g.name[:1] }}</div>
+          {% endif %}
+          <span class="guild-name">{{ g.name }}</span>
+        </button>
+        {% endfor %}
+      </div>
+    {% else %}
+      <div class="error-box">Aucun serveur accessible : ajoute le bot à un serveur et/ou vérifie tes permissions, puis rafraîchis.</div>
+    {% endif %}
+
+    <div class="guild-actions">
+      <form method="POST" action="/admin/guilds/refresh">
+        <input type="hidden" name="csrf" value="{{ csrf }}">
+        <button class="btn btn-ghost" type="submit">🔄 Rafraîchir la liste</button>
+      </form>
+      <form method="POST" action="/admin/logout">
+        <input type="hidden" name="csrf" value="{{ csrf }}">
+        <button class="btn btn-ghost" type="submit">Se déconnecter</button>
+      </form>
+    </div>
+  </div>
+
+  <script>
+    document.querySelectorAll(".guild-card-btn").forEach(function (btn) {
+      btn.addEventListener("click", async function () {
+        btn.disabled = true;
+        try {
+          const res = await fetch("/admin/guilds/select", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "X-CSRF-Token": document.querySelector('input[name="csrf"]').value,
+            },
+            body: JSON.stringify({ guild_id: Number(btn.dataset.gid) }),
+          });
+          if (res.ok) {
+            window.location.href = "/admin";
+          } else {
+            const data = await res.json();
+            alert(data.error || "Erreur");
+            btn.disabled = false;
+          }
+        } catch (e) {
+          alert("Erreur réseau");
+          btn.disabled = false;
+        }
+      });
+    });
+  </script>
+</body>
+</html>

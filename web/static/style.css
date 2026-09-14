@@ -156,3 +156,38 @@ tr:hover td { background: rgba(88,101,242,.06); }
 .skeleton { background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius); padding: 40px; color: var(--muted); text-align: center; }
 .empty { color: var(--muted); padding: 24px; text-align: center; }
 .stack { display: flex; flex-direction: column; gap: 6px; }
+
+/* ---------- Choix de serveur ---------- */
+.guild-card { width: 420px; }
+.guild-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 8px 0 4px; }
+.guild-card-btn {
+  display: flex; flex-direction: column; align-items: center; gap: 8px;
+  background: var(--panel2); border: 1px solid var(--border); color: var(--text);
+  border-radius: 12px; padding: 14px 10px; cursor: pointer; transition: .15s;
+  font-family: inherit; font-size: 14px;
+}
+.guild-card-btn:hover { border-color: var(--accent); background: #242b3f; }
+.guild-card-btn:disabled { opacity: .5; cursor: wait; }
+.guild-icon { width: 64px; height: 64px; border-radius: 50%; object-fit: cover; }
+.guild-icon-placeholder {
+  display: flex; align-items: center; justify-content: center;
+  background: var(--accent); color: #fff; font-size: 26px; font-weight: 700;
+}
+.guild-name { font-weight: 600; word-break: break-word; }
+.guild-actions { display: flex; gap: 10px; margin-top: 16px; }
+
+.current-guild {
+  display: flex; align-items: center; gap: 8px; padding: 10px 14px;
+  background: var(--panel2); border-radius: 8px; margin-bottom: 4px;
+}
+.current-guild img { width: 32px; height: 32px; border-radius: 50%; }
+.current-guild .placeholder-guild {
+  width: 32px; height: 32px; border-radius: 50%; background: var(--accent);
+  display: flex; align-items: center; justify-content: center; font-weight: 700;
+}
+.guild-switch {
+  margin-left: auto; text-decoration: none; color: var(--muted);
+  font-size: 14px; border: 1px solid var(--border); border-radius: 6px;
+  padding: 2px 8px; white-space: nowrap;
+}
+.guild-switch:hover { color: var(--accent); border-color: var(--accent); }

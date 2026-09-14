@@ -2,11 +2,13 @@
 Serveur web d'administration du bot.
 
 Authentification :
-  - mot de passe (variable d'env ADMIN_PASSWORD)
-  - Discord OAuth2 optionnel (IDENTIFY scope), restreint aux IDs de ADMIN_IDS
+  - Discord OAuth2 (scopes identify + guilds) : l'utilisateur accède aux serveurs
+    où le bot est présent ET où il a les permissions (ADMINISTRATOR ou MANAGE_GUILD),
+    ainsi qu'à tous les serveurs s'il fait partie de ADMIN_IDS (propriétaire).
+  - Mot de passe (ADMIN_PASSWORD) : accès propriétaire complet (tous les serveurs).
 
-Toutes les routes /api/* nécessitent une session authentifiée + un jeton CSRF
-pour les méthodes mutantes (POST/PATCH/DELETE).
+Un serveur (guild) doit être choisi avant d'administrer l'économie (shops, items,
+salaires, transactions sont scopés par guild).
 """
 
 import asyncio
@@ -38,9 +40,19 @@ AUTHORIZE_URL = "https://discord.com/oauth2/authorize"
 TOKEN_URL = "https://discord.com/api/oauth2/token"
 API_BASE = "https://discord.com/api"
 
+# Permissions Discord
+PERM_ADMINISTRATOR = 1 << 3
+PERM_MANAGE_GUILD = 1 << 5
+
 LOGIN_RATE_LIMIT = 10          # tentatives max
 LOGIN_RATE_WINDOW = 300        # secondes
 _login_attempts = {}
+
+
+def _perm_allows_guild(permissions):
+    """Vrai si le bitfield contient ADMINISTRATOR ou MANAGE_GUILD."""
+    perms = int(permissions or 0)
+    return bool(perms & (PERM_ADMINISTRATOR | PERM_MANAGE_GUILD))
 
 
 def create_app(bot):
@@ -51,14 +63,14 @@ def create_app(bot):
     def _inject_globals():
         return {
             "discord_oauth": bool(CLIENT_ID and CLIENT_SECRET and REDIRECT_URI),
-            "admin_name": session.get("admin_name", "Admin"),
+            "admin_name": session.get("name", "Admin"),
         }
 
     # ------------------------------------------------------------------
     # Helpers
     # ------------------------------------------------------------------
     def is_authenticated():
-        return session.get("admin") is True
+        return session.get("access") is True
 
     def csrf_token():
         if "_csrf" not in session:
@@ -68,13 +80,6 @@ def create_app(bot):
     def check_csrf():
         token = request.headers.get("X-CSRF-Token") or request.form.get("csrf")
         return bool(token) and hmac.compare_digest(token, session.get("_csrf", ""))
-
-    def require_auth():
-        if not is_authenticated():
-            if request.path.startswith("/api/") or request.accept_mimetypes.best == "application/json":
-                abort(401)
-            return redirect(url_for("login"))
-        return None
 
     def rate_limited(ip):
         now = time.time()
@@ -86,6 +91,62 @@ def create_app(bot):
         attempts.append(now)
         _login_attempts[ip] = attempts
         return False
+
+    def require_access():
+        if not is_authenticated():
+            if request.path.startswith("/api/") or request.accept_mimetypes.best == "application/json":
+                abort(401)
+            return redirect(url_for("login"))
+        return None
+
+    def guild_context():
+        """Retourne l'ID de la guild choisie, sinon 428."""
+        gid = session.get("guild_id")
+        if not gid or int(gid) not in {g["id"] for g in session.get("guilds", [])}:
+            abort(428, "choisir_un_serveur")
+        return int(gid)
+
+    def fetch_user_guilds(token):
+        req = urllib.request.Request(
+            f"{API_BASE}/users/@me/guilds",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            return jsonlib.loads(resp.read().decode())
+
+    def compute_accessible(user_guilds, user_id):
+        """Serveurs accessibles : bot présent + (propriétaire OU perms user)."""
+        bot_ids = {g.id for g in bot.guilds}
+        is_owner = str(user_id) in ADMIN_IDS
+        accessible = []
+        for g in user_guilds:
+            gid = int(g["id"])
+            if gid not in bot_ids:
+                continue
+            if is_owner or _perm_allows_guild(g.get("permissions")):
+                icon = g.get("icon")
+                accessible.append({
+                    "id": gid,
+                    "name": g.get("name") or f"Serveur {gid}",
+                    "icon": f"https://cdn.discordapp.com/icons/{gid}/{icon}.png?size=128" if icon else None,
+                })
+        return accessible
+
+    def accessible_from_bot():
+        """Accessible = tous les serveurs du bot (mode propriétaire / mot de passe)."""
+        return [
+            {"id": g.id, "name": g.name, "icon": None}
+            for g in bot.guilds
+        ]
+
+    def post_login_redirect():
+        guilds = session.get("guilds", [])
+        if not guilds:
+            return redirect(url_for("no_access"))
+        if len(guilds) == 1:
+            session["guild_id"] = guilds[0]["id"]
+            return redirect(url_for("admin"))
+        return redirect(url_for("choose_guild"))
 
     def resolve_names(ids):
         """Transforme des IDs Discord en noms lus depuis le cache du bot."""
@@ -126,6 +187,13 @@ def create_app(bot):
             logger.exception("Erreur statut bot")
             return {"ready": False, "error": str(e)}
 
+    def current_guild_info():
+        gid = session.get("guild_id")
+        for g in session.get("guilds", []):
+            if g["id"] == int(gid):
+                return g
+        return None
+
     # ------------------------------------------------------------------
     # Pages
     # ------------------------------------------------------------------
@@ -155,12 +223,17 @@ def create_app(bot):
             if not ADMIN_PASSWORD:
                 return render_template("login.html", error="Aucun mot de passe configuré (variable ADMIN_PASSWORD).", csrf=csrf_token()), 500
 
-            if hmac.compare_digest(password, ADMIN_PASSWORD):
-                session.clear()
-                session["admin"] = True
-                csrf_token()
-                return redirect(url_for("admin"))
-            return render_template("login.html", error="Mot de passe incorrect.", csrf=csrf_token()), 401
+            if not hmac.compare_digest(password, ADMIN_PASSWORD):
+                return render_template("login.html", error="Mot de passe incorrect.", csrf=csrf_token()), 401
+
+            session.clear()
+            session["access"] = True
+            session["name"] = "Propriétaire"
+            session["owner"] = True
+            session["guilds"] = accessible_from_bot()
+            session["guild_id"] = None
+            csrf_token()
+            return post_login_redirect()
 
         return render_template("login.html", error=None, csrf=csrf_token())
 
@@ -174,7 +247,8 @@ def create_app(bot):
             "client_id": CLIENT_ID,
             "redirect_uri": REDIRECT_URI,
             "response_type": "code",
-            "scope": "identify",
+            "scope": "identify guilds",
+            "prompt": "none",
             "state": state,
         })
         return redirect(f"{AUTHORIZE_URL}?{params}")
@@ -215,18 +289,79 @@ def create_app(bot):
             )
             with urllib.request.urlopen(req, timeout=15) as resp:
                 me = jsonlib.loads(resp.read().decode())
+
+            user_guilds = fetch_user_guilds(access_token)
         except Exception as e:
-            logger.exception("Échec récupération identité Discord")
+            logger.exception("Échec récupération identité / serveurs Discord")
             return render_template("login.html", error=f"Échec récupération identité : {e}", csrf=csrf_token()), 502
 
-        if str(me.get("id")) not in ADMIN_IDS:
-            return render_template("login.html", error="Ce compte Discord n'est pas autorisé.", csrf=csrf_token()), 403
+        accessible = compute_accessible(user_guilds, me.get("id"))
+
+        if not accessible:
+            msg = (
+                "Ton compte Discord n'est lié à aucun serveur du bot avec les permissions "
+                "requises (ADMINISTRATEUR ou GÉRER LE SERVEUR), ou tu n'apparais pas dans ADMIN_IDS."
+            )
+            return render_template("login.html", error=msg, csrf=csrf_token()), 403
 
         session.clear()
-        session["admin"] = True
-        session["admin_name"] = me.get("username")
+        session["access"] = True
+        session["name"] = me.get("username", "Utilisateur")
+        session["discord_id"] = me.get("id")
+        session["owner"] = str(me.get("id")) in ADMIN_IDS
+        session["oauth_token"] = access_token
+        session["guilds"] = accessible
+        session["guild_id"] = None
         csrf_token()
-        return redirect(url_for("admin"))
+        return post_login_redirect()
+
+    @app.route("/admin/no-access")
+    def no_access():
+        if not is_authenticated():
+            return redirect(url_for("login"))
+        return render_template("guilds.html", guilds=[], error="Aucun serveur accessible pour le moment.", csrf=csrf_token())
+
+    @app.route("/admin/guilds")
+    def choose_guild():
+        if not is_authenticated():
+            return redirect(url_for("login"))
+        return render_template("guilds.html", guilds=session.get("guilds", []), error=None, csrf=csrf_token())
+
+    @app.route("/admin/guilds/refresh", methods=["POST"])
+    def refresh_guilds():
+        if not check_csrf():
+            abort(403)
+        token = session.get("oauth_token")
+        if token:
+            try:
+                user_guilds = fetch_user_guilds(token)
+                accessible = compute_accessible(user_guilds, session.get("discord_id"))
+                if accessible:
+                    session["guilds"] = accessible
+            except Exception as e:
+                logger.exception("Échec refresh guilds")
+        else:
+            # Mode propriétaire / mot de passe : liste = serveurs du bot
+            session["guilds"] = accessible_from_bot()
+        return redirect(url_for("choose_guild"))
+
+    @app.route("/admin/guilds/select", methods=["POST"])
+    def select_guild():
+        if not check_csrf():
+            abort(403)
+        data = request.get_json(silent=True) or {}
+        gid = data.get("guild_id")
+        try:
+            gid = int(gid)
+        except (TypeError, ValueError):
+            return jsonify({"error": "ID de serveur invalide"}), 400
+
+        allowed = [g["id"] for g in session.get("guilds", [])]
+        if gid not in allowed:
+            return jsonify({"error": "Accès refusé pour ce serveur"}), 403
+
+        session["guild_id"] = gid
+        return jsonify({"ok": True, "guild_id": gid})
 
     @app.route("/admin/logout", methods=["POST"])
     def logout():
@@ -235,10 +370,17 @@ def create_app(bot):
 
     @app.route("/admin")
     def admin():
-        guard = require_auth()
+        guard = require_access()
         if guard:
             return guard
-        return render_template("admin.html", csrf=csrf_token(), admin_name=session.get("admin_name", "Admin"))
+        if not session.get("guild_id"):
+            return redirect(url_for("choose_guild"))
+        return render_template(
+            "admin.html",
+            csrf=csrf_token(),
+            admin_name=session.get("name", "Admin"),
+            guild=current_guild_info(),
+        )
 
     # ------------------------------------------------------------------
     # API
@@ -257,7 +399,7 @@ def create_app(bot):
     def audit(action, target="", details=""):
         database.add_audit_log(0, action, target, details)
 
-    # --- Statistiques & bot -------------------------------------------------
+    # --- Statistiques globales & bot -------------------------------------------
     @app.route("/api/stats")
     def api_stats():
         try:
@@ -268,7 +410,10 @@ def create_app(bot):
 
     @app.route("/api/bot")
     def api_bot():
-        return jsonify(bot_status())
+        status = bot_status()
+        status["owner"] = session.get("owner", False)
+        status["can_manage"] = [g["id"] for g in session.get("guilds", [])]
+        return jsonify(status)
 
     @app.post("/api/bot/sync")
     def api_bot_sync():
@@ -281,7 +426,7 @@ def create_app(bot):
             logger.exception("Erreur sync via web")
             return jsonify({"ok": False, "error": str(e)}), 500
 
-    # --- Utilisateurs ---------------------------------------------------------
+    # --- Utilisateurs (portefeuille global) -------------------------------------
     @app.route("/api/users")
     def api_users():
         q = request.args.get("q", "")
@@ -335,7 +480,7 @@ def create_app(bot):
             logger.exception("Erreur modification solde")
             return jsonify({"error": str(e)}), 500
 
-        audit("user_money", str(uid), f"{action} {amount}")
+        audit(f"user_money_{action}", str(uid), str(amount))
         return jsonify({"ok": True, "balance": database.get_balance(uid)})
 
     @app.route("/api/users/<int:uid>/inventory", methods=["POST"])
@@ -382,34 +527,42 @@ def create_app(bot):
         audit("inventory_remove", str(uid), f"{quantity}x item #{item_id} (shop {shop_id})")
         return jsonify({"ok": True})
 
-    # --- Shops ----------------------------------------------------------------
+    # --- Shops (scopés par guild) -------------------------------------------------
     @app.route("/api/shops")
     def api_shops():
-        shops = database.get_shops()
+        gid = guild_context()
+        shops = database.get_shops(gid)
         return jsonify([
-            {"shop_id": s[0], "name": s[1], "description": s[2]}
+            {"shop_id": s[0], "name": s[1], "description": s[2], "guild_id": gid}
             for s in shops
         ])
 
     @app.route("/api/shops", methods=["POST"])
     def api_shops_create():
+        gid = guild_context()
         data = request.get_json(silent=True) or {}
         name = (data.get("name") or "").strip()
         if not name:
             return jsonify({"error": "Nom requis"}), 400
-        shop_id = database.create_shop(name, data.get("description", ""))
-        audit("shop_create", str(shop_id), name)
+        shop_id = database.create_shop(name, data.get("description", ""), guild_id=gid)
+        audit("shop_create", str(shop_id), f"{name} (serveur {gid})")
         return jsonify({"ok": True, "shop_id": shop_id}), 201
 
     @app.route("/api/shops/<int:shop_id>", methods=["DELETE"])
     def api_shops_delete(shop_id):
+        gid = guild_context()
+        if not database.shop_in_guild(shop_id, gid):
+            return jsonify({"error": "Shop introuvable dans ce serveur"}), 404
         if not database.delete_shop(shop_id):
             return jsonify({"error": "Shop introuvable"}), 404
-        audit("shop_delete", str(shop_id))
+        audit("shop_delete", str(shop_id), f"serveur {gid}")
         return jsonify({"ok": True})
 
     @app.route("/api/shops/<int:shop_id>/items")
     def api_shop_items(shop_id):
+        gid = guild_context()
+        if not database.shop_in_guild(shop_id, gid):
+            return jsonify({"error": "Shop introuvable dans ce serveur"}), 404
         items = database.get_shop_items_all(shop_id)
         return jsonify([
             {
@@ -419,10 +572,11 @@ def create_app(bot):
             for i in items
         ])
 
-    # --- Items -----------------------------------------------------------------
+    # --- Items (scopés par guild) --------------------------------------------------
     @app.route("/api/items")
     def api_items():
-        items = database.get_all_items()
+        gid = guild_context()
+        items = database.get_items_for_guild(gid)
         return jsonify([
             {
                 "item_id": i[0], "name": i[1], "price": i[2],
@@ -433,6 +587,7 @@ def create_app(bot):
 
     @app.route("/api/items", methods=["POST"])
     def api_items_create():
+        gid = guild_context()
         data = request.get_json(silent=True) or {}
         shop_id = data.get("shop_id")
         name = (data.get("name") or "").strip()
@@ -442,29 +597,44 @@ def create_app(bot):
             return jsonify({"error": "Prix invalide"}), 400
         if not shop_id or not name or price <= 0:
             return jsonify({"error": "shop_id, nom et prix (>0) requis"}), 400
+        if not database.shop_in_guild(int(shop_id), gid):
+            return jsonify({"error": "Ce shop n'appartient pas à ton serveur"}), 403
         try:
+            stock_raw = data.get("stock")
+            stock = int(stock_raw) if stock_raw not in (None, "") else -1
             item_id = database.add_item_to_shop(
                 int(shop_id), name, price,
-                data.get("description", ""),
-                data.get("stock", -1) if data.get("stock") != "" else -1,
+                data.get("description", ""), stock,
             )
         except ValueError as e:
             return jsonify({"error": str(e)}), 400
-        audit("item_create", str(item_id), name)
+        audit("item_create", str(item_id), f"{name} (serveur {gid})")
         return jsonify({"ok": True, "item_id": item_id}), 201
+
+    def _item_of_guild(item_id, gid):
+        item = database.get_item_by_id(item_id)
+        if not item:
+            return None
+        # item = (item_id, shop_id, name, ...)
+        if not database.shop_in_guild(item[1], gid):
+            return None
+        return item
 
     @app.route("/api/items/<int:item_id>", methods=["DELETE"])
     def api_items_delete(item_id):
-        if not database.get_item_by_id(item_id):
-            return jsonify({"error": "Item introuvable"}), 404
+        gid = guild_context()
+        if not _item_of_guild(item_id, gid):
+            return jsonify({"error": "Item introuvable dans ce serveur"}), 404
         database.remove_item(item_id)
-        audit("item_deactivate", str(item_id))
+        audit("item_deactivate", str(item_id), f"serveur {gid}")
         return jsonify({"ok": True})
 
     @app.route("/api/items/<int:item_id>/reactivate", methods=["POST"])
     def api_items_reactivate(item_id):
-        if not database.get_item_by_id(item_id):
-            return jsonify({"error": "Item introuvable"}), 404
+        gid = guild_context()
+        item = _item_of_guild(item_id, gid)
+        if not item:
+            return jsonify({"error": "Item introuvable dans ce serveur"}), 404
         data = request.get_json(silent=True) or {}
         stock = data.get("stock")
         try:
@@ -472,18 +642,25 @@ def create_app(bot):
         except ValueError:
             return jsonify({"error": "Stock invalide"}), 400
         database.reactivate_item(item_id, stock)
-        audit("item_reactivate", str(item_id), f"stock={stock}")
+        audit("item_reactivate", str(item_id), f"stock={stock} (serveur {gid})")
         return jsonify({"ok": True})
 
-    # --- Salaires ---------------------------------------------------------------
+    # --- Salaires (scopés par guild) --------------------------------------------------
+    def guild_roles(gid):
+        guild = bot.get_guild(gid)
+        if not guild:
+            return []
+        return {r.id: r for r in guild.roles}
+
     @app.route("/api/salaries")
     def api_salaries():
-        salaries = database.get_all_roles_salaries()
-        names = resolve_names([s[0] for s in salaries])
+        gid = guild_context()
+        roles = guild_roles(gid)
+        salaries = [s for s in database.get_all_roles_salaries() if s[0] in roles]
         return jsonify([
             {
                 "role_id": s[0],
-                "name": names.get(s[0], str(s[0])),
+                "name": roles[s[0]].name if s[0] in roles else str(s[0]),
                 "salary": s[1],
                 "cooldown": s[2],
             }
@@ -492,6 +669,8 @@ def create_app(bot):
 
     @app.route("/api/salaries", methods=["POST"])
     def api_salaries_create():
+        gid = guild_context()
+        roles = guild_roles(gid)
         data = request.get_json(silent=True) or {}
         try:
             salary = int(data["salary"])
@@ -501,12 +680,18 @@ def create_app(bot):
             return jsonify({"error": "role_id, salary et cooldown requis"}), 400
         if salary <= 0:
             return jsonify({"error": "Salaire invalide"}), 400
+        if role_id not in roles:
+            return jsonify({"error": "Ce rôle n'existe pas dans ton serveur"}), 403
         database.assign_role_salary(role_id, salary, cooldown)
-        audit("salary_upsert", str(role_id), f"{salary} / {cooldown}s")
+        audit("salary_upsert", str(role_id), f"{salary} / {cooldown}s (serveur {gid})")
         return jsonify({"ok": True})
 
     @app.route("/api/salaries/<int:role_id>", methods=["PATCH"])
     def api_salaries_update(role_id):
+        gid = guild_context()
+        roles = guild_roles(gid)
+        if role_id not in roles:
+            return jsonify({"error": "Ce rôle n'existe pas dans ton serveur"}), 403
         data = request.get_json(silent=True) or {}
         try:
             salary = int(data["salary"])
@@ -514,23 +699,28 @@ def create_app(bot):
         except (TypeError, ValueError, KeyError):
             return jsonify({"error": "salary et cooldown requis"}), 400
         database.assign_role_salary(role_id, salary, cooldown)
-        audit("salary_upsert", str(role_id), f"{salary} / {cooldown}s")
+        audit("salary_upsert", str(role_id), f"{salary} / {cooldown}s (serveur {gid})")
         return jsonify({"ok": True})
 
     @app.route("/api/salaries/<int:role_id>", methods=["DELETE"])
     def api_salaries_delete(role_id):
+        gid = guild_context()
+        roles = guild_roles(gid)
+        if role_id not in roles:
+            return jsonify({"error": "Ce rôle n'existe pas dans ton serveur"}), 403
         database.remove_role_salary(role_id)
-        audit("salary_delete", str(role_id))
+        audit("salary_delete", str(role_id), f"serveur {gid}")
         return jsonify({"ok": True})
 
-    # --- Transactions & audit ----------------------------------------------------
+    # --- Transactions (scopées par guild) ---------------------------------------------
     @app.route("/api/transactions")
     def api_transactions():
+        gid = guild_context()
         limit = min(int(request.args.get("limit", 100)), 500)
         uid = request.args.get("user_id")
         uid = int(uid) if uid else None
         tx_type = request.args.get("type") or None
-        rows = database.get_transactions(limit, uid, tx_type)
+        rows = database.get_transactions(limit, uid, tx_type, guild_id=gid)
         names = resolve_names([r[1] for r in rows])
         return jsonify([
             {
@@ -573,7 +763,7 @@ def create_app(bot):
     @app.errorhandler(403)
     def _forbidden(e):
         if request.path.startswith("/api/"):
-            return jsonify({"error": "Jeton CSRF invalide"}), 403
+            return jsonify({"error": "Jeton CSRF invalide ou accès refusé"}), 403
         return redirect(url_for("login"))
 
     @app.errorhandler(404)
@@ -581,5 +771,9 @@ def create_app(bot):
         if request.path.startswith("/api/"):
             return jsonify({"error": "Route inconnue"}), 404
         return "Page introuvable", 404
+
+    @app.errorhandler(428)
+    def _precondition(e):
+        return jsonify({"error": "choisir_un_serveur", "message": "Aucun serveur sélectionné. Retour au choix du serveur."}), 428
 
     return app

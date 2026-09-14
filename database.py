@@ -15,6 +15,16 @@ _pool = None
 _pool_lock = threading.Lock()
 
 
+def _ensure_column(cursor, table, column, definition):
+    """Ajoute une colonne si elle n'existe pas (migration idempotente)."""
+    cursor.execute("""
+        SELECT 1 FROM information_schema.columns
+        WHERE table_name = %s AND column_name = %s
+    """, (table, column))
+    if cursor.fetchone() is None:
+        cursor.execute(f"ALTER TABLE {table} ADD COLUMN {column} {definition}")
+
+
 def _get_pool():
     """Crée le pool de connexions au premier appel."""
     global _pool
@@ -48,7 +58,8 @@ def create_tables():
             CREATE TABLE IF NOT EXISTS shops (
                 shop_id SERIAL PRIMARY KEY,
                 name TEXT NOT NULL,
-                description TEXT DEFAULT ''
+                description TEXT DEFAULT '',
+                guild_id BIGINT
             )
         """)
 
@@ -121,6 +132,7 @@ def create_tables():
                 item_name TEXT,
                 quantity INTEGER,
                 details TEXT DEFAULT '',
+                guild_id BIGINT,
                 created_at TIMESTAMP DEFAULT NOW()
             )
         """)
@@ -137,6 +149,10 @@ def create_tables():
             )
         """)
 
+        # Migrations : guild_id sur les tables existantes (compatibilité bases actuelles)
+        _ensure_column(cursor, "shops", "guild_id", "BIGINT")
+        _ensure_column(cursor, "transactions", "guild_id", "BIGINT")
+
         conn.commit()
         logger.info("Tables créées / vérifiées avec succès")
     except Exception:
@@ -149,23 +165,37 @@ def create_tables():
 
 
 # Gestion shops et items
-def get_shops():
+def get_shops(guild_id=None):
+    """
+    Retourne les shops. Si guild_id est fourni : les shops de la guild
+    plus les shops hérités sans guild (guild_id NULL = globaux).
+    """
     conn = None
     try:
         conn = connect_db()
         cursor = conn.cursor()
-        cursor.execute("SELECT shop_id, name, description FROM shops")
+        if guild_id is not None:
+            cursor.execute("""
+                SELECT shop_id, name, description FROM shops
+                WHERE guild_id = %s OR guild_id IS NULL
+            """, (guild_id,))
+        else:
+            cursor.execute("SELECT shop_id, name, description FROM shops")
         return cursor.fetchall()
     finally:
         release_conn(conn)
 
 
-def create_shop(name, description=""):
+def create_shop(name, description="", guild_id=None):
     conn = None
     try:
         conn = connect_db()
         cursor = conn.cursor()
-        cursor.execute("INSERT INTO shops (name, description) VALUES (%s, %s) RETURNING shop_id", (name, description))
+        cursor.execute("""
+            INSERT INTO shops (name, description, guild_id)
+            VALUES (%s, %s, %s)
+            RETURNING shop_id
+        """, (name, description, guild_id))
         shop_id = cursor.fetchone()[0]
         conn.commit()
         return shop_id
@@ -319,6 +349,53 @@ def get_all_items():
         cursor = conn.cursor()
         cursor.execute("SELECT item_id, name, price, description, shop_id, stock, active FROM items")
         return cursor.fetchall()
+    finally:
+        release_conn(conn)
+
+
+def get_guild_shop_ids(guild_id):
+    """IDs des shops visibles pour une guild (les siens + les shops globaux hérités)."""
+    conn = None
+    try:
+        conn = connect_db()
+        cursor = conn.cursor()
+        cursor.execute("SELECT shop_id FROM shops WHERE guild_id = %s OR guild_id IS NULL", (guild_id,))
+        return [r[0] for r in cursor.fetchall()]
+    finally:
+        release_conn(conn)
+
+
+def get_items_for_guild(guild_id):
+    """Tous les items des shops accessibles à une guild (avec l'info shop)."""
+    shop_ids = get_guild_shop_ids(guild_id)
+    if not shop_ids:
+        return []
+    conn = None
+    try:
+        conn = connect_db()
+        cursor = conn.cursor()
+        placeholders = ",".join(["%s"] * len(shop_ids))
+        cursor.execute(f"""
+            SELECT item_id, name, price, description, shop_id, stock, active
+            FROM items
+            WHERE shop_id IN ({placeholders})
+        """, shop_ids)
+        return cursor.fetchall()
+    finally:
+        release_conn(conn)
+
+
+def shop_in_guild(shop_id, guild_id):
+    """Vrai si le shop appartient à la guild (ou est global, guild_id NULL)."""
+    conn = None
+    try:
+        conn = connect_db()
+        cursor = conn.cursor()
+        cursor.execute("SELECT guild_id FROM shops WHERE shop_id = %s", (shop_id,))
+        row = cursor.fetchone()
+        if not row:
+            return False
+        return row[0] is None or row[0] == guild_id
     finally:
         release_conn(conn)
 
@@ -979,16 +1056,16 @@ except Exception:
 # ---------------------------------------------------------------
 # Journalisation des transactions et aide pour l'administration web
 # ---------------------------------------------------------------
-def log_transaction(user_id, tx_type, amount=0, item_id=None, shop_id=None, item_name=None, quantity=None, details=""):
+def log_transaction(user_id, tx_type, amount=0, item_id=None, shop_id=None, item_name=None, quantity=None, details="", guild_id=None):
     """Insère une entrée dans le journal des transactions."""
     conn = None
     try:
         conn = connect_db()
         cursor = conn.cursor()
         cursor.execute("""
-            INSERT INTO transactions (user_id, type, amount, item_id, shop_id, item_name, quantity, details)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
-        """, (user_id, tx_type, amount, item_id, shop_id, item_name, quantity, details))
+            INSERT INTO transactions (user_id, type, amount, item_id, shop_id, item_name, quantity, details, guild_id)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+        """, (user_id, tx_type, amount, item_id, shop_id, item_name, quantity, details, guild_id))
         conn.commit()
     except Exception:
         if conn:
@@ -999,8 +1076,11 @@ def log_transaction(user_id, tx_type, amount=0, item_id=None, shop_id=None, item
         release_conn(conn)
 
 
-def get_transactions(limit=100, user_id=None, tx_type=None):
-    """Retourne les dernières transactions, filtrées optionnellement."""
+def get_transactions(limit=100, user_id=None, tx_type=None, guild_id=None):
+    """
+    Retourne les dernières transactions, filtrées optionnellement.
+    Si guild_id est fourni : transactions de la guild + transactions globales (guild_id NULL).
+    """
     conn = None
     try:
         conn = connect_db()
@@ -1018,6 +1098,9 @@ def get_transactions(limit=100, user_id=None, tx_type=None):
         if tx_type:
             conditions.append("type = %s")
             params.append(tx_type)
+        if guild_id is not None:
+            conditions.append("(guild_id = %s OR guild_id IS NULL)")
+            params.append(guild_id)
         if conditions:
             sql_query += " WHERE " + " AND ".join(conditions)
         sql_query += " ORDER BY id DESC LIMIT %s"

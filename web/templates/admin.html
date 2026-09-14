@@ -11,6 +11,19 @@
   <div class="layout">
     <aside class="sidebar">
       <div class="brand">🤖 Bot Admin</div>
+      <div class="current-guild">
+        {% if guild %}
+          {% if guild.icon %}
+            <img src="{{ guild.icon }}" alt="">
+          {% else %}
+            <div class="placeholder-guild">{{ guild.name[:1] }}</div>
+          {% endif %}
+          <span>{{ guild.name }}</span>
+          <a href="/admin/guilds" class="guild-switch" title="Changer de serveur">⇄</a>
+        {% else %}
+          <a href="/admin/guilds" class="guild-switch">Choisir un serveur</a>
+        {% endif %}
+      </div>
       <nav id="nav">
         <a data-view="dashboard" class="active">📊 Dashboard</a>
         <a data-view="users">👥 Utilisateurs</a>
