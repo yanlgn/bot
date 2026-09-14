@@ -169,7 +169,7 @@ Views.users = async (el, query = "") => {
   document.getElementById("user-search").addEventListener("keydown", (e) => { if (e.key === "Enter") search(); });
 
   el.querySelectorAll("[data-open-user]").forEach((b) =>
-    b.addEventListener("click", () => openUserModal(Number(b.dataset.openUser)))
+    b.addEventListener("click", () => openUserModal(b.dataset.openUser))
   );
 };
 
