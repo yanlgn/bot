@@ -49,6 +49,25 @@ LOGIN_RATE_LIMIT = 10          # tentatives max
 LOGIN_RATE_WINDOW = 300        # secondes
 _login_attempts = {}
 
+# Discord API est derrière Cloudflare : sans User-Agent de navigateur,
+# les requêtes urllib sont refusées (HTTP 403 / erreur Cloudflare 1010).
+_UA = (
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+    "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+)
+
+
+def _headers(extra=None):
+    """En-têtes HTTP compatibles Cloudflare pour les appels à l'API Discord."""
+    h = {
+        "User-Agent": _UA,
+        "Accept": "application/json, */*",
+        "Accept-Language": "fr,fr-FR;q=0.9,en;q=0.8",
+    }
+    if extra:
+        h.update(extra)
+    return h
+
 
 def _perm_allows_guild(permissions):
     """Vrai si le bitfield contient ADMINISTRATOR ou MANAGE_GUILD."""
@@ -119,7 +138,7 @@ def create_app(bot):
     def fetch_user_guilds(token):
         req = urllib.request.Request(
             f"{API_BASE}/users/@me/guilds",
-            headers={"Authorization": f"Bearer {token}"},
+            headers=_headers({"Authorization": f"Bearer {token}"}),
         )
         with urllib.request.urlopen(req, timeout=15) as resp:
             return jsonlib.loads(resp.read().decode())
@@ -281,9 +300,9 @@ def create_app(bot):
                 "code": code,
                 "redirect_uri": REDIRECT_URI,
             }).encode()
-            req = urllib.request.Request(TOKEN_URL, data=data, headers={
+            req = urllib.request.Request(TOKEN_URL, data=data, headers=_headers({
                 "Content-Type": "application/x-www-form-urlencoded",
-            })
+            }))
             with urllib.request.urlopen(req, timeout=15) as resp:
                 token_data = jsonlib.loads(resp.read().decode())
 
@@ -298,7 +317,7 @@ def create_app(bot):
         try:
             req = urllib.request.Request(
                 f"{API_BASE}/users/@me",
-                headers={"Authorization": f"Bearer {access_token}"},
+                headers=_headers({"Authorization": f"Bearer {access_token}"}),
             )
             with urllib.request.urlopen(req, timeout=15) as resp:
                 me = jsonlib.loads(resp.read().decode())
