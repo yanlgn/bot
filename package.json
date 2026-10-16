@@ -1,0 +1,34 @@
+{
+  "name": "sciclub-manager",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Plateforme complète de gestion de club scientifique Discord & Web",
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "scripts": {
+    "build": "npm run build --workspaces --if-present",
+    "dev:bot": "npm run dev --workspace=@sciclub/bot",
+    "dev:web": "npm run dev --workspace=@sciclub/web",
+    "dev": "npm run dev --workspaces --parallel",
+    "lint": "npm run lint --workspaces --if-present",
+    "clean": "npm run clean --workspaces --if-present",
+    "migrate": "node scripts/migrate.js"
+  },
+  "keywords": [
+    "discord",
+    "bot",
+    "dashboard",
+    "science-club",
+    "express",
+    "react",
+    "typescript"
+  ],
+  "author": "SciClub Manager Team",
+  "license": "MIT",
+  "devDependencies": {
+    "typescript": "^5.4.5"
+  }
+}

@@ -1,1 +1,0 @@
-"""Package web : interface d'administration du bot."""

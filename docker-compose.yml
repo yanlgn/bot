@@ -1,0 +1,41 @@
+version: '3.8'
+
+services:
+  sciclub-bot:
+    build:
+      context: .
+      dockerfile: apps/bot/Dockerfile
+    container_name: sciclub_bot
+    restart: unless-stopped
+    env_file:
+      - .env
+    volumes:
+      - ./config:/app/config
+      - ./data:/app/data
+    environment:
+      - NODE_ENV=production
+      - DATABASE_PATH=/app/data/sciclub.sqlite
+      - CONFIG_PATH=/app/config/guilds
+      - BACKUP_PATH=/app/config/backups
+
+  sciclub-web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+    container_name: sciclub_web
+    restart: unless-stopped
+    ports:
+      - "3001:3001"
+    env_file:
+      - .env
+    volumes:
+      - ./config:/app/config
+      - ./data:/app/data
+    environment:
+      - NODE_ENV=production
+      - PORT=3001
+      - DATABASE_PATH=/app/data/sciclub.sqlite
+      - CONFIG_PATH=/app/config/guilds
+      - BACKUP_PATH=/app/config/backups
+    depends_on:
+      - sciclub-bot

@@ -1,0 +1,238 @@
+{
+  "guildId": "123456789012345678",
+  "locale": "fr",
+  "timezone": "Europe/Paris",
+  "club": {
+    "name": "SciClub Polytech",
+    "description": "Club scientifique universitaire dédié à la robotique, l'intelligence artificielle, l'astronomie, l'aérospatial et les sciences expérimentales.",
+    "logoUrl": "https://images.unsplash.com/photo-1507668077129-56e32842fceb?w=200"
+  },
+  "roles": {
+    "admin": {
+      "name": "Admin Club",
+      "color": "#E11D48",
+      "permissions": ["Administrator"],
+      "protected": true
+    },
+    "moderator": {
+      "name": "Modérateur Club",
+      "color": "#F59E0B",
+      "permissions": [
+        "ManageMessages",
+        "ModerateMembers",
+        "ViewChannel",
+        "SendMessages",
+        "ReadMessageHistory"
+      ],
+      "protected": true
+    },
+    "mentor": {
+      "name": "Enseignant / Mentor",
+      "color": "#8B5CF6",
+      "permissions": [
+        "ViewChannel",
+        "SendMessages",
+        "ReadMessageHistory",
+        "MentionEveryone"
+      ],
+      "protected": false
+    },
+    "member": {
+      "name": "Membre Scientifique",
+      "color": "#22C55E",
+      "permissions": [
+        "ViewChannel",
+        "SendMessages",
+        "ReadMessageHistory",
+        "AddReactions",
+        "AttachFiles",
+        "EmbedLinks"
+      ],
+      "protected": false
+    },
+    "projectLeader": {
+      "name": "Chef de Projet",
+      "color": "#06B6D4",
+      "permissions": [
+        "ViewChannel",
+        "SendMessages",
+        "ReadMessageHistory",
+        "ManageThreads"
+      ],
+      "protected": false
+    },
+    "guest": {
+      "name": "Invité / Visiteur",
+      "color": "#64748B",
+      "permissions": [
+        "ViewChannel",
+        "ReadMessageHistory"
+      ],
+      "protected": false
+    }
+  },
+  "categories": [
+    {
+      "key": "accueil",
+      "name": "🌟 Accueil & Infos"
+    },
+    {
+      "key": "sciences",
+      "name": "🔬 Pôles Scientifiques"
+    },
+    {
+      "key": "projets",
+      "name": "🚀 Projets & Hackathons"
+    },
+    {
+      "key": "evenements",
+      "name": "📅 Événements & Ateliers"
+    },
+    {
+      "key": "ressources",
+      "name": "📚 Ressources & Veille"
+    },
+    {
+      "key": "administration",
+      "name": "⚙️ Administration"
+    }
+  ],
+  "channels": {
+    "welcome": {
+      "name": "bienvenue",
+      "type": "text",
+      "categoryKey": "accueil",
+      "topic": "Bienvenue au SciClub ! Présente-toi et découvre nos activités.",
+      "readonlyForMembers": false
+    },
+    "announcements": {
+      "name": "annonces-officielles",
+      "type": "text",
+      "categoryKey": "accueil",
+      "topic": "Annonces officielles du club scientifique.",
+      "readonlyForMembers": true
+    },
+    "ia_robotique": {
+      "name": "ia-et-robotique",
+      "type": "text",
+      "categoryKey": "sciences",
+      "topic": "Discussions autour de l'IA, des réseaux de neurones, ROS et Arduino.",
+      "readonlyForMembers": false
+    },
+    "astronomie": {
+      "name": "astronomie-et-espace",
+      "type": "text",
+      "categoryKey": "sciences",
+      "topic": "Observations célestes, astrophysique et missions spatiales.",
+      "readonlyForMembers": false
+    },
+    "general_projects": {
+      "name": "projets-collaboratifs",
+      "type": "text",
+      "categoryKey": "projets",
+      "topic": "Échange d'idées, recherche de coéquipiers et suivi de projets.",
+      "readonlyForMembers": false
+    },
+    "events": {
+      "name": "planning-evenements",
+      "type": "text",
+      "categoryKey": "evenements",
+      "topic": "Conférences, workshops et concours du club.",
+      "readonlyForMembers": true
+    },
+    "resources": {
+      "name": "bibliotheque-ressources",
+      "type": "text",
+      "categoryKey": "ressources",
+      "topic": "Liens, papiers de recherche, MOOCs et tutoriels partagés.",
+      "readonlyForMembers": false
+    },
+    "logs": {
+      "name": "logs-administration",
+      "type": "text",
+      "categoryKey": "administration",
+      "topic": "Journal des actions du bot et de la modération.",
+      "readonlyForMembers": true
+    }
+  },
+  "channelPermissions": [
+    {
+      "channelKey": "announcements",
+      "overwrites": [
+        {
+          "targetKey": "role:member",
+          "permissions": {
+            "ViewChannel": "ALLOW",
+            "ReadMessageHistory": "ALLOW",
+            "SendMessages": "DENY",
+            "AddReactions": "ALLOW"
+          }
+        },
+        {
+          "targetKey": "role:moderator",
+          "permissions": {
+            "ViewChannel": "ALLOW",
+            "ReadMessageHistory": "ALLOW",
+            "SendMessages": "ALLOW",
+            "ManageMessages": "ALLOW"
+          }
+        },
+        {
+          "targetKey": "role:admin",
+          "permissions": {
+            "ViewChannel": "ALLOW",
+            "ReadMessageHistory": "ALLOW",
+            "SendMessages": "ALLOW",
+            "ManageMessages": "ALLOW"
+          }
+        }
+      ]
+    },
+    {
+      "channelKey": "logs",
+      "overwrites": [
+        {
+          "targetKey": "role:member",
+          "permissions": {
+            "ViewChannel": "DENY"
+          }
+        },
+        {
+          "targetKey": "role:guest",
+          "permissions": {
+            "ViewChannel": "DENY"
+          }
+        },
+        {
+          "targetKey": "role:moderator",
+          "permissions": {
+            "ViewChannel": "ALLOW",
+            "ReadMessageHistory": "ALLOW",
+            "SendMessages": "DENY"
+          }
+        },
+        {
+          "targetKey": "role:admin",
+          "permissions": {
+            "ViewChannel": "ALLOW",
+            "ReadMessageHistory": "ALLOW",
+            "SendMessages": "ALLOW"
+          }
+        }
+      ]
+    }
+  ],
+  "moderation": {
+    "logChannelKey": "logs",
+    "maxWarnings": 3,
+    "autoMuteDurationMinutes": 60,
+    "badWordsFilter": true
+  },
+  "points": {
+    "enabled": true,
+    "messagePoints": 1,
+    "eventParticipationPoints": 10,
+    "projectCreationPoints": 20,
+    "resourceSharingPoints": 5
+  }
+}

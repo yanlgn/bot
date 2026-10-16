@@ -1,0 +1,52 @@
+services:
+  # Service Web : API Express + Dashboard React
+  - type: web
+    name: sciclub-web
+    env: node
+    plan: free
+    buildCommand: npm install && npm run build
+    startCommand: node apps/web/dist-server/index.js
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 10000
+      - key: DATABASE_PATH
+        value: ./data/sciclub.sqlite
+      - key: CONFIG_PATH
+        value: ./config/guilds
+      - key: BACKUP_PATH
+        value: ./config/backups
+      - key: DISCORD_BOT_TOKEN
+        sync: false
+      - key: DISCORD_CLIENT_ID
+        sync: false
+      - key: DISCORD_CLIENT_SECRET
+        sync: false
+      - key: DISCORD_REDIRECT_URI
+        sync: false
+      - key: FRONTEND_URL
+        sync: false
+      - key: SESSION_SECRET
+        generateValue: true
+
+  # Service Worker : Bot Discord
+  - type: worker
+    name: sciclub-bot
+    env: node
+    plan: free
+    buildCommand: npm install && npm run build
+    startCommand: node apps/bot/dist/index.js
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_PATH
+        value: ./data/sciclub.sqlite
+      - key: CONFIG_PATH
+        value: ./config/guilds
+      - key: BACKUP_PATH
+        value: ./config/backups
+      - key: DISCORD_BOT_TOKEN
+        sync: false
+      - key: DISCORD_CLIENT_ID
+        sync: false
