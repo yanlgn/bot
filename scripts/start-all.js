@@ -1,18 +1,24 @@
 import { spawn } from 'node:child_process';
 import path from 'node:path';
 
-console.log('🚀 Lancement simultané de SciClub Bot et SciClub Web sur Render...');
+console.log('🚀 Lancement simultané de SciClub Bot et SciClub Web sur Render (avec --experimental-sqlite)...');
 
 // 1. Démarrage du Bot Discord
-const botProcess = spawn('node', [path.resolve('apps/bot/dist/index.js')], {
+const botProcess = spawn('node', ['--experimental-sqlite', path.resolve('apps/bot/dist/index.js')], {
   stdio: 'inherit',
-  env: process.env
+  env: {
+    ...process.env,
+    NODE_OPTIONS: (process.env.NODE_OPTIONS || '') + ' --experimental-sqlite'
+  }
 });
 
 // 2. Démarrage du Serveur Web & Dashboard
-const webProcess = spawn('node', [path.resolve('apps/web/dist-server/index.js')], {
+const webProcess = spawn('node', ['--experimental-sqlite', path.resolve('apps/web/dist-server/index.js')], {
   stdio: 'inherit',
-  env: process.env
+  env: {
+    ...process.env,
+    NODE_OPTIONS: (process.env.NODE_OPTIONS || '') + ' --experimental-sqlite'
+  }
 });
 
 const handleExit = (code) => {

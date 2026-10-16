@@ -5,10 +5,12 @@ services:
     env: node
     plan: free
     buildCommand: npm install && npm run build
-    startCommand: node apps/web/dist-server/index.js
+    startCommand: node --experimental-sqlite apps/web/dist-server/index.js
     envVars:
       - key: NODE_ENV
         value: production
+      - key: NODE_OPTIONS
+        value: --experimental-sqlite
       - key: PORT
         value: 10000
       - key: DATABASE_PATH
@@ -36,10 +38,12 @@ services:
     env: node
     plan: free
     buildCommand: npm install && npm run build
-    startCommand: node apps/bot/dist/index.js
+    startCommand: node --experimental-sqlite apps/bot/dist/index.js
     envVars:
       - key: NODE_ENV
         value: production
+      - key: NODE_OPTIONS
+        value: --experimental-sqlite
       - key: DATABASE_PATH
         value: ./data/sciclub.sqlite
       - key: CONFIG_PATH

@@ -15,8 +15,8 @@
     "dev": "npm run dev --workspaces --parallel",
     "lint": "npm run lint --workspaces --if-present",
     "clean": "npm run clean --workspaces --if-present",
-    "migrate": "node scripts/migrate.js",
-    "start": "node scripts/start-all.js"
+    "migrate": "node --experimental-sqlite scripts/migrate.js",
+    "start": "node --experimental-sqlite scripts/start-all.js"
   },
   "keywords": [
     "discord",
