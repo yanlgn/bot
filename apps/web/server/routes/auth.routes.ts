@@ -18,7 +18,7 @@ authRouter.use(authLimiter);
  * Redirige vers la page d'autorisation Discord OAuth2 avec state CSRF
  */
 authRouter.get('/login', (req: Request, res: Response) => {
-  const clientId = process.env.DISCORD_CLIENT_ID;
+  const clientId = process.env.DISCORD_CLIENT_ID || '1350228159005724772';
   const redirectUri = encodeURIComponent(process.env.DISCORD_REDIRECT_URI || 'http://localhost:3001/api/auth/callback');
   const state = randomBytes(16).toString('hex');
 
@@ -47,7 +47,7 @@ authRouter.get('/callback', async (req: Request, res: Response) => {
 
   try {
     const params = new URLSearchParams({
-      client_id: process.env.DISCORD_CLIENT_ID!,
+      client_id: process.env.DISCORD_CLIENT_ID || '1350228159005724772',
       client_secret: process.env.DISCORD_CLIENT_SECRET!,
       grant_type: 'authorization_code',
       code: code as string,

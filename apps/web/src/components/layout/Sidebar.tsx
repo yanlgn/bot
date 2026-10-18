@@ -34,21 +34,25 @@ export const Sidebar: React.FC = () => {
   ];
 
   return (
-    <aside className="w-64 bg-[#0F172A] border-r border-gray-800 flex flex-col h-screen fixed left-0 top-0 z-30">
-      {/* SciClub Logo Header */}
-      <div className="h-16 flex items-center px-6 border-b border-gray-800 space-x-3">
-        <div className="w-9 h-9 rounded-lg bg-gradient-to-tr from-blue-600 to-indigo-500 flex items-center justify-center text-white shadow-lg shadow-blue-500/20">
-          <Rocket className="w-5 h-5" />
-        </div>
-        <div>
-          <h1 className="font-bold text-gray-100 text-sm tracking-wide">SciClub Manager</h1>
-          <span className="text-[10px] text-blue-400 font-medium tracking-wider uppercase">Plateforme Discord</span>
+    <aside className="w-64 bg-[#0B0B0D] border-r border-[#1C1C24] flex flex-col h-screen fixed left-0 top-0 z-30">
+      {/* Cortex Logo Header */}
+      <div className="h-16 flex items-center px-5 border-b border-[#1C1C24] space-x-3 bg-[#0B0B0D]">
+        <img
+          src="/cortex-emblem.png"
+          alt="CORTEX"
+          className="w-9 h-9 rounded-full shrink-0 drop-shadow-[0_0_10px_rgba(229,9,46,0.4)]"
+        />
+        <div className="truncate">
+          <h1 className="font-extrabold text-white text-sm tracking-wider flex items-center">
+            CORT<span className="text-[#E5092E] font-black tracking-tight inline-flex flex-col justify-center leading-none mx-0.5"><span className="h-[2px] w-2.5 bg-[#E5092E] my-[0.8px] rounded-sm"></span><span className="h-[2px] w-2.5 bg-[#E5092E] my-[0.8px] rounded-sm"></span><span className="h-[2px] w-2.5 bg-[#E5092E] my-[0.8px] rounded-sm"></span></span>X
+          </h1>
+          <span className="text-[9px] text-[#E5092E] font-semibold tracking-[0.2em] uppercase">SCIENTIFIC CLUB</span>
         </div>
       </div>
 
       {/* Navigation Links */}
       <div className="flex-1 py-4 px-3 overflow-y-auto space-y-1">
-        <div className="px-3 pb-2 text-[11px] font-semibold text-gray-500 uppercase tracking-wider">
+        <div className="px-3 pb-2 text-[10px] font-bold text-gray-500 uppercase tracking-widest">
           Gestion du Club
         </div>
 
@@ -60,10 +64,10 @@ export const Sidebar: React.FC = () => {
               to={item.path}
               end={item.path === `/dashboard/${guildId}`}
               className={({ isActive }) =>
-                `flex items-center px-3 py-2.5 rounded-lg text-sm font-medium transition ${
+                `flex items-center px-3 py-2.5 rounded-xl text-xs font-semibold transition ${
                   isActive
-                    ? 'bg-blue-600 text-white shadow-md shadow-blue-600/30'
-                    : 'text-gray-400 hover:text-gray-100 hover:bg-gray-800/60'
+                    ? 'bg-[#E5092E] text-white shadow-lg shadow-[#E5092E]/25'
+                    : 'text-gray-400 hover:text-white hover:bg-[#16161D]'
                 }`
               }
             >
@@ -75,20 +79,20 @@ export const Sidebar: React.FC = () => {
       </div>
 
       {/* Guild Info Footer */}
-      <div className="p-4 border-t border-gray-800 bg-[#0B0F19]/50">
+      <div className="p-3.5 border-t border-[#1C1C24] bg-[#111116]/80">
         <div className="flex items-center space-x-3">
           {activeGuild?.iconUrl ? (
-            <img src={activeGuild.iconUrl} alt={activeGuild.name} className="w-8 h-8 rounded-full" />
+            <img src={activeGuild.iconUrl} alt={activeGuild.name} className="w-8 h-8 rounded-xl border border-[#242430]" />
           ) : (
-            <div className="w-8 h-8 rounded-full bg-gray-800 flex items-center justify-center text-xs font-bold text-gray-300">
-              {activeGuild?.name.slice(0, 2).toUpperCase() || 'SC'}
+            <div className="w-8 h-8 rounded-xl bg-[#1C1C24] border border-[#242430] flex items-center justify-center text-xs font-bold text-gray-300">
+              {activeGuild?.name.slice(0, 2).toUpperCase() || 'CX'}
             </div>
           )}
           <div className="truncate">
-            <p className="text-xs font-semibold text-gray-200 truncate">{activeGuild?.name || 'Serveur'}</p>
-            <p className="text-[10px] text-emerald-400 flex items-center">
+            <p className="text-xs font-bold text-white truncate">{activeGuild?.name || 'Serveur'}</p>
+            <p className="text-[10px] text-emerald-400 flex items-center font-medium">
               <span className="w-1.5 h-1.5 bg-emerald-400 rounded-full mr-1 animate-pulse" />
-              Connecté
+              Cortex Connecté
             </p>
           </div>
         </div>

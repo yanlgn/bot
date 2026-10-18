@@ -2,17 +2,17 @@ import { SlashCommandBuilder, ChatInputCommandInteraction, EmbedBuilder } from '
 
 export const data = new SlashCommandBuilder()
   .setName('help')
-  .setDescription('Affiche la liste complète des commandes de SciClub Manager');
+  .setDescription('Affiche la liste complète des commandes de Cortex');
 
 export async function execute(interaction: ChatInputCommandInteraction) {
   const embed = new EmbedBuilder()
-    .setTitle('🔬 SciClub Manager - Guide des Commandes')
-    .setColor(0x3B82F6)
-    .setDescription('Bienvenue sur le système d\'assistance du club scientifique. Voici les commandes à votre disposition :')
+    .setTitle('🧠 CORTEX Scientific Club - Guide des Commandes')
+    .setColor(0xE5092E)
+    .setDescription('Bienvenue sur le système d\'assistance du club scientifique Cortex. Voici les commandes à votre disposition :')
     .addFields(
       {
         name: '👤 Membre & Participation',
-        value: '`/profil` : Affiche votre profil, vos badges et vos points de club\n`/classement` : Affiche le classement des membres les plus actifs'
+        value: '`/profil` : Affiche votre profil, vos badges et vos points Cortex\n`/classement` : Affiche le classement des membres les plus actifs'
       },
       {
         name: '🚀 Projets Scientifiques',
@@ -32,10 +32,10 @@ export async function execute(interaction: ChatInputCommandInteraction) {
       },
       {
         name: '⚙️ Administration (Staff)',
-        value: '`/config`, `/role`, `/canal`, `/permission`, `/sync`, `/backup` ou utilisez le **Dashboard Web SciClub** pour une gestion graphique complète.'
+        value: '`/config`, `/role`, `/canal`, `/permission`, `/sync`, `/backup` ou utilisez le **Dashboard Web Cortex** pour une gestion graphique complète.'
       }
     )
-    .setFooter({ text: 'SciClub Manager • Sciences & Innovation' });
+    .setFooter({ text: 'CORTEX Scientific Club • Innovation & Sciences' });
 
   await interaction.reply({ embeds: [embed], ephemeral: true });
 }

@@ -74,7 +74,7 @@ export const Overview: React.FC = () => {
       {/* Title */}
       <div>
         <h1 className="text-2xl font-bold text-gray-100">{guild.name}</h1>
-        <p className="text-sm text-gray-400">Tableau de bord scientifique & indicateurs d'activité</p>
+        <p className="text-sm text-gray-400">Tableau de bord Cortex Scientific Club & indicateurs d'activité</p>
       </div>
 
       {/* KPI Cards */}
@@ -84,11 +84,11 @@ export const Overview: React.FC = () => {
           return (
             <div
               key={idx}
-              className="bg-[#111827] border border-gray-800 rounded-xl p-5 flex items-center justify-between shadow-lg"
+              className="bg-[#121217] border border-[#242430] rounded-2xl p-5 flex items-center justify-between shadow-xl"
             >
               <div>
-                <p className="text-xs font-medium text-gray-400 uppercase tracking-wider">{card.label}</p>
-                <p className="text-2xl font-bold text-gray-100 mt-1">{card.value}</p>
+                <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider">{card.label}</p>
+                <p className="text-2xl font-black text-white mt-1">{card.value}</p>
               </div>
               <div className={`w-12 h-12 rounded-xl ${card.bg} ${card.color} flex items-center justify-center`}>
                 <Icon className="w-6 h-6" />
@@ -101,13 +101,13 @@ export const Overview: React.FC = () => {
       {/* Second Row: Bar Chart & Top Members */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Activity Distribution Chart */}
-        <div className="lg:col-span-2 bg-[#111827] border border-gray-800 rounded-xl p-6 shadow-lg">
+        <div className="lg:col-span-2 bg-[#121217] border border-[#242430] rounded-2xl p-6 shadow-xl">
           <div className="flex items-center justify-between mb-6">
             <div>
-              <h3 className="font-semibold text-gray-100">Répartition des Entités du Club</h3>
-              <p className="text-xs text-gray-400">Données en direct issues du serveur Discord et de la base SciClub</p>
+              <h3 className="font-bold text-gray-100">Répartition des Entités du Club</h3>
+              <p className="text-xs text-gray-400">Données en direct issues du serveur Discord et de la base Cortex</p>
             </div>
-            <Activity className="w-5 h-5 text-blue-400" />
+            <Activity className="w-5 h-5 text-[#E5092E]" />
           </div>
 
           <div className="h-64">
@@ -116,9 +116,9 @@ export const Overview: React.FC = () => {
                 <XAxis dataKey="name" stroke="#6B7280" fontSize={12} tickLine={false} />
                 <YAxis stroke="#6B7280" fontSize={12} tickLine={false} />
                 <Tooltip
-                  contentStyle={{ backgroundColor: '#1F2937', borderColor: '#374151', borderRadius: '0.5rem', color: '#F3F4F6' }}
+                  contentStyle={{ backgroundColor: '#16161D', borderColor: '#242430', borderRadius: '0.75rem', color: '#F3F4F6' }}
                 />
-                <Bar dataKey="count" fill="#3B82F6" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="count" fill="#E5092E" radius={[6, 6, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           </div>

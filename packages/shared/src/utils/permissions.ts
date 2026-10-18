@@ -26,6 +26,13 @@ export const DISCORD_PERMISSIONS: PermissionDefinition[] = [
     category: 'general'
   },
   {
+    flag: 'ManageGuild',
+    bit: 1n << 5n,
+    name: 'Gérer le serveur',
+    description: 'Permet de modifier les paramètres généraux du serveur.',
+    category: 'general'
+  },
+  {
     flag: 'ManageRoles',
     bit: 1n << 28n,
     name: 'Gérer les rôles',

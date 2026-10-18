@@ -31,7 +31,7 @@ export async function execute(member: GuildMember) {
       const embed = new EmbedBuilder()
         .setTitle(`🌟 Bienvenue au ${config.club.name} !`)
         .setDescription(`Bienvenue <@${member.id}> parmi nous ! Découvre les projets, conférences et ateliers scientifiques.`)
-        .setColor(0x3B82F6)
+        .setColor(0xE5092E)
         .setThumbnail(member.user.displayAvatarURL())
         .addFields(
           { name: '🚀 Présente-toi', value: 'Dis-nous ce qui t\'intéresse en sciences ou technologies !' },

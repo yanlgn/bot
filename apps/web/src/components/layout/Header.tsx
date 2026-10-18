@@ -18,17 +18,17 @@ export const Header: React.FC = () => {
     : 'https://cdn.discordapp.com/embed/avatars/0.png';
 
   return (
-    <header className="h-16 bg-[#0F172A]/90 backdrop-blur-md border-b border-gray-800 flex items-center justify-between px-8 sticky top-0 z-20">
+    <header className="h-16 bg-[#0B0B0D]/90 backdrop-blur-md border-b border-[#1C1C24] flex items-center justify-between px-8 sticky top-0 z-20">
       {/* Sélecteur de Serveur */}
       <div className="flex items-center space-x-3">
-        <Server className="w-5 h-5 text-blue-400" />
+        <Server className="w-5 h-5 text-[#E5092E]" />
         <div className="relative">
           <select
             value={activeGuild?.id || ''}
             onChange={handleGuildChange}
-            className="appearance-none bg-gray-800 text-gray-200 text-sm font-medium py-1.5 pl-3 pr-8 rounded-lg border border-gray-700 hover:border-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
+            className="appearance-none bg-[#16161D] text-gray-200 text-xs font-semibold py-2 pl-3 pr-8 rounded-xl border border-[#242430] hover:border-[#E5092E] focus:outline-none focus:ring-2 focus:ring-[#E5092E] cursor-pointer"
           >
-            {user?.guilds.map(g => (
+            {user?.guilds.filter(g => g.hasBot).map(g => (
               <option key={g.id} value={g.id}>
                 {g.name}
               </option>

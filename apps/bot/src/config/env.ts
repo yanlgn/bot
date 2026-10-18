@@ -16,11 +16,15 @@ if (token) {
   process.env.DISCORD_BOT_TOKEN = token;
 }
 
+if (!process.env.DISCORD_CLIENT_ID) {
+  process.env.DISCORD_CLIENT_ID = '1350228159005724772';
+}
+
 const EnvSchema = z.object({
   NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
   LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace']).default('info'),
   DISCORD_BOT_TOKEN: z.string().min(1, 'DISCORD_BOT_TOKEN (ou DISCORD_TOKEN) est requis'),
-  DISCORD_CLIENT_ID: z.string().min(1, 'DISCORD_CLIENT_ID est requis'),
+  DISCORD_CLIENT_ID: z.string().default('1350228159005724772'),
   DATABASE_PATH: z.string().default('./data/sciclub.sqlite'),
   CONFIG_PATH: z.string().default('./config/guilds'),
   BACKUP_PATH: z.string().default('./config/backups')

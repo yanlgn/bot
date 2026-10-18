@@ -1,4 +1,4 @@
-import { Client, Events, REST, Routes } from 'discord.js';
+import { Client, Events, REST, Routes, ActivityType } from 'discord.js';
 import { commands } from '../commands/index.js';
 import { env } from '../config/env.js';
 import { logger } from '../utils/logger.js';
@@ -7,7 +7,8 @@ export const name = Events.ClientReady;
 export const once = true;
 
 export async function execute(client: Client) {
-  logger.info(`🤖 SciClub Bot connecté en tant que ${client.user?.tag} !`);
+  logger.info(`🤖 Cortex Bot connecté en tant que ${client.user?.tag} !`);
+  client.user?.setActivity('Cortex Scientific Club', { type: ActivityType.Watching });
 
   // Enregistrement global ou par serveur des slash commands
   try {

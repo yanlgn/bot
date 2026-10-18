@@ -3,14 +3,14 @@
   "locale": "fr",
   "timezone": "Europe/Paris",
   "club": {
-    "name": "SciClub Polytech",
-    "description": "Club scientifique universitaire dédié à la robotique, l'intelligence artificielle, l'astronomie, l'aérospatial et les sciences expérimentales.",
-    "logoUrl": "https://images.unsplash.com/photo-1507668077129-56e32842fceb?w=200"
+    "name": "Cortex Scientific Club",
+    "description": "Club scientifique d'excellence dédié à l'intelligence artificielle, la robotique, l'astronomie et l'innovation technologique.",
+    "logoUrl": ""
   },
   "roles": {
     "admin": {
-      "name": "Admin Club",
-      "color": "#E11D48",
+      "name": "Admin Cortex",
+      "color": "#E5092E",
       "permissions": ["Administrator"],
       "protected": true
     },

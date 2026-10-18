@@ -42,7 +42,7 @@ export async function execute(interaction: ChatInputCommandInteraction) {
   const embed = new EmbedBuilder()
     .setTitle(`Profil Scientifique de ${targetUser.username}`)
     .setThumbnail(targetUser.displayAvatarURL())
-    .setColor(0x10B981)
+    .setColor(0xE5092E)
     .addFields(
       { name: '✨ Points de Participation', value: `**${balance}** pts`, inline: true },
       { name: '🚀 Projets Actifs', value: `${projectsCount.count}`, inline: true },
@@ -59,7 +59,7 @@ export async function execute(interaction: ChatInputCommandInteraction) {
           : 'Inconnu'
       }
     )
-    .setFooter({ text: 'SciClub Manager' });
+    .setFooter({ text: 'CORTEX Scientific Club' });
 
   await interaction.reply({ embeds: [embed] });
 }

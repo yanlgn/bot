@@ -7,20 +7,33 @@ export default {
   darkMode: 'class',
   theme: {
     extend: {
+      fontFamily: {
+        sans: ['Montserrat', 'sans-serif'],
+      },
       colors: {
+        cortex: {
+          red: '#E5092E',
+          'red-dark': '#B00520',
+          'red-light': '#FF2A4D',
+          black: '#0B0B0D',
+          dark: '#111116',
+          card: '#16161D',
+          border: '#242430',
+          muted: '#8E8E9A'
+        },
         brand: {
-          50: '#eff6ff',
-          100: '#dbeafe',
-          500: '#3b82f6',
-          600: '#2563eb',
-          700: '#1d4ed8',
-          900: '#1e3a8a'
+          50: '#fff1f2',
+          100: '#ffe4e6',
+          500: '#E5092E',
+          600: '#CC0727',
+          700: '#B00520',
+          900: '#7A0315'
         },
         scidark: {
-          900: '#0B0F19',
-          800: '#111827',
-          700: '#1F2937',
-          600: '#374151'
+          900: '#0B0B0D',
+          800: '#111116',
+          700: '#16161D',
+          600: '#242430'
         }
       }
     }

@@ -35,23 +35,34 @@ meRouter.get('/', requireAuth, async (req: Request, res: Response) => {
       permissions: string;
     }>;
 
-    // Filtre les guildes où le bot est présent ET où l'utilisateur est admin ou manage_guild
-    const manageableGuilds = userGuilds
-      .filter(g => {
-        const botGuild = discordClient.guilds.cache.get(g.id);
-        if (!botGuild) return false;
+    // Récupérer les guildes administrables (Owner, Administrator ou ManageGuild)
+    const manageableGuilds = await Promise.all(
+      userGuilds
+        .filter(g => {
+          const isAdmin = g.owner || hasPermissionBit(g.permissions, 'Administrator') || hasPermissionBit(g.permissions, 'ManageGuild');
+          return isAdmin;
+        })
+        .map(async g => {
+          let hasBot = discordClient.guilds.cache.has(g.id);
+          if (!hasBot && discordClient.isReady()) {
+            try {
+              const fetched = await discordClient.guilds.fetch(g.id).catch(() => null);
+              hasBot = !!fetched;
+            } catch {
+              hasBot = false;
+            }
+          }
 
-        const isAdmin = g.owner || hasPermissionBit(g.permissions, 'Administrator') || hasPermissionBit(g.permissions, 'ManageGuild');
-        return isAdmin;
-      })
-      .map(g => ({
-        id: g.id,
-        name: g.name,
-        icon: g.icon,
-        iconUrl: g.icon ? `https://cdn.discordapp.com/icons/${g.id}/${g.icon}.png` : null,
-        owner: g.owner,
-        hasBot: true
-      }));
+          return {
+            id: g.id,
+            name: g.name,
+            icon: g.icon,
+            iconUrl: g.icon ? `https://cdn.discordapp.com/icons/${g.id}/${g.icon}.png` : null,
+            owner: g.owner,
+            hasBot
+          };
+        })
+    );
 
     res.json({
       success: true,

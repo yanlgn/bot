@@ -25,10 +25,10 @@ export async function execute(interaction: ChatInputCommandInteraction) {
   });
 
   const embed = new EmbedBuilder()
-    .setTitle('🏆 Classement Scientifique du Club')
-    .setColor(0xF59E0B)
+    .setTitle('🏆 Classement CORTEX Scientific Club')
+    .setColor(0xE5092E)
     .setDescription(lines.join('\n\n'))
-    .setFooter({ text: 'Les points sont attribués lors de vos messages, créations de projets et participations aux événements.' });
+    .setFooter({ text: 'CORTEX • Les points récompensent les projets, messages et participations aux événements.' });
 
   await interaction.reply({ embeds: [embed] });
 }
