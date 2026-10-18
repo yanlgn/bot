@@ -27,6 +27,9 @@ try {
 // Migrations idempotentes de colonnes
 try { db.exec('ALTER TABLE projects ADD COLUMN department_id TEXT;'); } catch {}
 try { db.exec('ALTER TABLE resources ADD COLUMN department_id TEXT;'); } catch {}
+try { db.exec('ALTER TABLE department_members ADD COLUMN motivation TEXT;'); } catch {}
+try { db.exec('ALTER TABLE department_members ADD COLUMN skills TEXT;'); } catch {}
+try { db.exec('ALTER TABLE department_members ADD COLUMN availability TEXT;'); } catch {}
 
 // Table des sessions persistantes pour garantir l'authentification
 try {

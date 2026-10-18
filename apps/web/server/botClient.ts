@@ -17,7 +17,8 @@ export const logger = pino({
 
 export const discordClient = new Client({
   intents: [
-    GatewayIntentBits.Guilds
+    GatewayIntentBits.Guilds,
+    GatewayIntentBits.GuildMembers
   ]
 });
 

@@ -9,7 +9,16 @@ import {
   hexToDecimalColor,
   sanitizeChannelName
 } from '@sciclub/shared';
-import { ChannelType, PermissionFlagsBits, TextChannel } from 'discord.js';
+import {
+  ChannelType,
+  PermissionFlagsBits,
+  TextChannel,
+  ActionRowBuilder,
+  StringSelectMenuBuilder,
+  ButtonBuilder,
+  ButtonStyle,
+  EmbedBuilder
+} from 'discord.js';
 import { db } from '../db.js';
 import { randomUUID } from 'crypto';
 import { addDepartmentToConfig, removeDepartmentFromConfig } from '../utils/configHelper.js';
@@ -315,6 +324,49 @@ departmentsRouter.get('/:deptId/members', requireAuth, async (req: Request, res:
   if (!dept) return res.status(404).json({ success: false, error: 'Pôle introuvable.' });
 
   try {
+    // 1. Synchronisation automatique en direct si le serveur Discord est accessible
+    if (guild) {
+      try {
+        if (dept.leader_role_id) {
+          const leaderRole = guild.roles.cache.get(dept.leader_role_id);
+          if (leaderRole) {
+            for (const [mId, m] of leaderRole.members) {
+              db.prepare(`
+                INSERT INTO department_members (department_id, guild_id, user_id, role, status, requested_at, reviewed_at)
+                VALUES (?, ?, ?, 'leader', 'approved', datetime('now'), datetime('now'))
+                ON CONFLICT(department_id, user_id) DO UPDATE SET role = 'leader', status = 'approved'
+              `).run(dept.id, req.params.guildId, mId);
+
+              db.prepare(`
+                INSERT INTO users (id, username, discriminator, avatar)
+                VALUES (?, ?, ?, ?)
+                ON CONFLICT(id) DO UPDATE SET username = excluded.username, avatar = excluded.avatar
+              `).run(mId, m.user.username, m.user.discriminator || '0', m.user.avatar || null);
+            }
+          }
+        }
+
+        if (dept.member_role_id) {
+          const memberRole = guild.roles.cache.get(dept.member_role_id);
+          if (memberRole) {
+            for (const [mId, m] of memberRole.members) {
+              db.prepare(`
+                INSERT INTO department_members (department_id, guild_id, user_id, role, status, requested_at, reviewed_at)
+                VALUES (?, ?, ?, 'member', 'approved', datetime('now'), datetime('now'))
+                ON CONFLICT(department_id, user_id) DO NOTHING
+              `).run(dept.id, req.params.guildId, mId);
+
+              db.prepare(`
+                INSERT INTO users (id, username, discriminator, avatar)
+                VALUES (?, ?, ?, ?)
+                ON CONFLICT(id) DO UPDATE SET username = excluded.username, avatar = excluded.avatar
+              `).run(mId, m.user.username, m.user.discriminator || '0', m.user.avatar || null);
+            }
+          }
+        }
+      } catch {}
+    }
+
     const records = db.prepare(`
       SELECT dm.*, u.username, u.avatar
       FROM department_members dm
@@ -343,6 +395,9 @@ departmentsRouter.get('/:deptId/members', requireAuth, async (req: Request, res:
         avatarUrl,
         role: r.role,
         status: r.status,
+        motivation: r.motivation || null,
+        skills: r.skills || null,
+        availability: r.availability || null,
         requestedAt: r.requested_at,
         reviewedBy: r.reviewed_by,
         reviewedAt: r.reviewed_at
@@ -417,5 +472,100 @@ departmentsRouter.post('/:deptId/members/:userId/review', requireAuth, requireGu
   res.json({
     success: true,
     message: action === 'approve' ? 'Adhésion validée et rôle Discord attribué !' : 'Candidature refusée.'
+  });
+});
+
+/**
+ * POST /api/guilds/:guildId/departments/send-panel
+ * Envoie un message interactif (Embed + Menu déroulant + Boutons) dans le salon choisi
+ * pour permettre aux membres de postuler à un pôle via un formulaire modal.
+ */
+departmentsRouter.post('/send-panel', requireAuth, requireGuildAdmin, async (req: Request, res: Response) => {
+  const { guildId } = req.params;
+  const { channelId, title, description } = req.body;
+
+  if (!channelId) {
+    return res.status(400).json({ success: false, error: 'Identifiant du salon requis.' });
+  }
+
+  const guild = discordClient.guilds.cache.get(guildId);
+  if (!guild) {
+    return res.status(404).json({ success: false, error: 'Serveur Discord introuvable ou le bot n\'est pas connecté.' });
+  }
+
+  const channel = await guild.channels.fetch(channelId).catch(() => null);
+  if (!channel || !channel.isTextBased()) {
+    return res.status(400).json({ success: false, error: 'Le salon spécifié n\'existe pas ou n\'est pas un salon textuel valide.' });
+  }
+
+  const botMember = await guild.members.fetchMe();
+  if (!channel.permissionsFor(botMember)?.has([PermissionFlagsBits.SendMessages, PermissionFlagsBits.EmbedLinks])) {
+    return res.status(403).json({ success: false, error: 'Le bot n\'a pas la permission d\'envoyer des messages et des embeds dans ce salon.' });
+  }
+
+  const departments = db.prepare(`
+    SELECT * FROM departments 
+    WHERE guild_id = ? AND is_archived = 0
+    ORDER BY created_at ASC
+  `).all(guildId) as any[];
+
+  if (departments.length === 0) {
+    return res.status(400).json({ success: false, error: 'Aucun pôle scientifique actif n\'a encore été configuré sur ce serveur.' });
+  }
+
+  const embed = new EmbedBuilder()
+    .setTitle(title || '🔴 CORTEX SCIENTIFIC CLUB — PÔLES & CANDIDATURES')
+    .setColor(0xE5092E)
+    .setDescription(
+      description ||
+      '🔬 **Rejoignez un Pôle de Recherche & d\'Innovation Scientifique !**\n\n' +
+      'Les départements de CORTEX vous permettent de collaborer sur des projets concrets, de participer à des hackathons et compétitions et d\'accéder à du mentorat avancé.\n\n' +
+      '**📋 Pôles actuellement ouverts :**\n' +
+      departments.map(d => `• **${d.icon || '🔬'} ${d.name}**\n  *${d.description || 'Pôle scientifique actif.'}*`).join('\n\n') +
+      '\n\n👉 **Pour postuler :** Cliquez sur le bouton ou choisissez votre pôle dans le menu déroulant ci-dessous pour ouvrir le formulaire de candidature.'
+    )
+    .setFooter({ text: 'CORTEX Scientific Club • Vos réponses seront examinées par les responsables' })
+    .setTimestamp();
+
+  const selectMenu = new StringSelectMenuBuilder()
+    .setCustomId('cortex_dept_select')
+    .setPlaceholder('🎯 Sélectionnez votre pôle pour postuler...')
+    .addOptions(
+      departments.slice(0, 25).map(d => ({
+        label: d.name.slice(0, 100),
+        value: d.id,
+        description: (d.description || 'Candidater à ce pôle').slice(0, 100),
+        emoji: d.icon || '🔬'
+      }))
+    );
+
+  const rows: ActionRowBuilder<any>[] = [
+    new ActionRowBuilder().addComponents(selectMenu)
+  ];
+
+  if (departments.length <= 5) {
+    const buttonRow = new ActionRowBuilder().addComponents(
+      departments.map(d =>
+        new ButtonBuilder()
+          .setCustomId(`cortex_dept_btn_${d.id}`)
+          .setLabel(d.short_name || d.name)
+          .setEmoji(d.icon || '🔬')
+          .setStyle(ButtonStyle.Secondary)
+      )
+    );
+    rows.push(buttonRow);
+  }
+
+  await (channel as TextChannel).send({
+    embeds: [embed],
+    components: rows
+  });
+
+  const user = req.session.user!;
+  recordAudit(guildId, user.id, user.username, 'DEPARTMENT_PANEL_SENT', channelId, `Panneau de recrutement envoyé dans #${channel.name}`);
+
+  res.json({
+    success: true,
+    message: `Le panneau de candidature aux pôles a été envoyé avec succès dans #${channel.name} !`
   });
 });

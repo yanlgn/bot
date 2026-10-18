@@ -16,7 +16,9 @@ import {
   Lightbulb,
   Sparkles,
   RefreshCw,
-  ExternalLink
+  ExternalLink,
+  Send,
+  MessageSquare
 } from 'lucide-react';
 import { Modal } from '../components/common/Modal';
 import { ConfirmDialog } from '../components/common/ConfirmDialog';
@@ -50,6 +52,9 @@ interface DepartmentMember {
   avatarUrl?: string;
   role: 'leader' | 'member';
   status: 'pending' | 'approved' | 'rejected';
+  motivation?: string | null;
+  skills?: string | null;
+  availability?: string | null;
   requestedAt: string;
   reviewedBy?: string;
   reviewedAt?: string;
@@ -61,8 +66,15 @@ export const DepartmentsPage: React.FC = () => {
 
   const [activeTab, setActiveTab] = useState<'poles' | 'candidatures'>('poles');
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+  const [isPanelModalOpen, setIsPanelModalOpen] = useState(false);
   const [selectedDeptForMembers, setSelectedDeptForMembers] = useState<DepartmentData | null>(null);
   const [deletingDept, setDeletingDept] = useState<DepartmentData | null>(null);
+
+  // Panel modal state
+  const [panelChannelId, setPanelChannelId] = useState('');
+  const [panelTitle, setPanelTitle] = useState('🔴 CORTEX SCIENTIFIC CLUB — PÔLES & CANDIDATURES');
+  const [panelDescription, setPanelDescription] = useState('');
+  const [panelFeedback, setPanelFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
 
   // Form states for creation
   const [name, setName] = useState('');
@@ -84,11 +96,34 @@ export const DepartmentsPage: React.FC = () => {
     enabled: !!guildId
   });
 
+  // Fetch Channels for panel deployment
+  const { data: channels = [] } = useQuery<any[]>({
+    queryKey: ['channels', guildId],
+    queryFn: () => apiFetch(`/guilds/${guildId}/channels`),
+    enabled: !!guildId && isPanelModalOpen
+  });
+
   // Fetch Members & Pending for selected department
   const { data: deptMembers = [], isLoading: isLoadingMembers } = useQuery<DepartmentMember[]>({
     queryKey: ['dept-members', guildId, selectedDeptForMembers?.id],
     queryFn: () => apiFetch(`/guilds/${guildId}/departments/${selectedDeptForMembers?.id}/members`),
     enabled: !!guildId && !!selectedDeptForMembers
+  });
+
+  // Send Panel Mutation
+  const sendPanelMutation = useMutation({
+    mutationFn: (body: any) =>
+      apiFetch(`/guilds/${guildId}/departments/send-panel`, { method: 'POST', body: JSON.stringify(body) }),
+    onSuccess: (res: any) => {
+      setPanelFeedback({ type: 'success', message: res.message || 'Panneau envoyé avec succès sur Discord !' });
+      setTimeout(() => {
+        setIsPanelModalOpen(false);
+        setPanelFeedback(null);
+      }, 2200);
+    },
+    onError: (err: any) => {
+      setPanelFeedback({ type: 'error', message: err.message || 'Erreur lors de l\'envoi du panneau.' });
+    }
   });
 
   // Create Department Mutation
@@ -180,6 +215,18 @@ export const DepartmentsPage: React.FC = () => {
         </div>
 
         <div className="flex items-center space-x-3">
+          <button
+            onClick={() => {
+              setPanelFeedback(null);
+              setIsPanelModalOpen(true);
+            }}
+            className="flex items-center px-4 py-2 bg-[#1E1E28] hover:bg-[#282836] text-white text-sm font-bold rounded-lg transition border border-[#323246]"
+            title="Envoyer un message interactif sur Discord pour recruter des membres"
+          >
+            <Send className="w-4 h-4 mr-2 text-[#E5092E]" />
+            Panneau de Recrutement
+          </button>
+
           <button
             onClick={() => syncMutation.mutate()}
             disabled={syncMutation.isPending}
@@ -588,42 +635,73 @@ export const DepartmentsPage: React.FC = () => {
                   Aucune candidature en attente d'approbation.
                 </p>
               ) : (
-                <div className="space-y-2">
+                <div className="space-y-3">
                   {deptMembers.filter(m => m.status === 'pending').map(mem => (
                     <div
                       key={mem.userId}
-                      className="flex items-center justify-between p-3 bg-[#1A1A22] border border-amber-500/20 rounded-xl"
+                      className="p-3.5 bg-[#1A1A22] border border-amber-500/25 rounded-xl space-y-3"
                     >
-                      <div className="flex items-center space-x-3">
-                        {mem.avatarUrl ? (
-                          <img src={mem.avatarUrl} alt="" className="w-8 h-8 rounded-full" />
-                        ) : (
-                          <div className="w-8 h-8 rounded-full bg-gray-700 flex items-center justify-center font-bold text-xs text-white">
-                            {mem.displayName.slice(0, 2).toUpperCase()}
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center space-x-3">
+                          {mem.avatarUrl ? (
+                            <img src={mem.avatarUrl} alt="" className="w-9 h-9 rounded-full border border-gray-700" />
+                          ) : (
+                            <div className="w-9 h-9 rounded-full bg-gray-700 flex items-center justify-center font-bold text-xs text-white">
+                              {mem.displayName.slice(0, 2).toUpperCase()}
+                            </div>
+                          )}
+                          <div>
+                            <div className="text-xs font-bold text-white flex items-center">
+                              {mem.displayName}
+                              {mem.username && mem.username !== mem.displayName && (
+                                <span className="text-[10px] text-gray-500 font-normal ml-1.5">(@{mem.username})</span>
+                              )}
+                            </div>
+                            <div className="text-[10px] text-gray-400">
+                              Postulé le {new Date(mem.requestedAt).toLocaleDateString('fr-FR')} à {new Date(mem.requestedAt).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}
+                            </div>
                           </div>
-                        )}
-                        <div>
-                          <div className="text-xs font-bold text-white">{mem.displayName}</div>
-                          <div className="text-[10px] text-gray-400">Postulé le {new Date(mem.requestedAt).toLocaleDateString('fr-FR')}</div>
+                        </div>
+
+                        <div className="flex items-center space-x-2">
+                          <button
+                            onClick={() => reviewMutation.mutate({ deptId: selectedDeptForMembers.id, userId: mem.userId, action: 'approve' })}
+                            disabled={reviewMutation.isPending}
+                            className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold rounded-lg transition flex items-center space-x-1 shadow"
+                          >
+                            <CheckCircle2 className="w-3.5 h-3.5 mr-1" />
+                            Valider
+                          </button>
+                          <button
+                            onClick={() => reviewMutation.mutate({ deptId: selectedDeptForMembers.id, userId: mem.userId, action: 'reject' })}
+                            disabled={reviewMutation.isPending}
+                            className="px-3 py-1.5 bg-gray-800 hover:bg-rose-600 text-gray-300 hover:text-white text-xs font-bold rounded-lg transition flex items-center space-x-1"
+                          >
+                            <XCircle className="w-3.5 h-3.5 mr-1" />
+                            Refuser
+                          </button>
                         </div>
                       </div>
 
-                      <div className="flex items-center space-x-2">
-                        <button
-                          onClick={() => reviewMutation.mutate({ deptId: selectedDeptForMembers.id, userId: mem.userId, action: 'approve' })}
-                          className="px-3 py-1 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold rounded-lg transition flex items-center space-x-1"
-                        >
-                          <CheckCircle2 className="w-3.5 h-3.5 mr-1" />
-                          Approuver
-                        </button>
-                        <button
-                          onClick={() => reviewMutation.mutate({ deptId: selectedDeptForMembers.id, userId: mem.userId, action: 'reject' })}
-                          className="px-3 py-1 bg-gray-800 hover:bg-rose-600 text-gray-300 hover:text-white text-xs font-bold rounded-lg transition flex items-center space-x-1"
-                        >
-                          <XCircle className="w-3.5 h-3.5 mr-1" />
-                          Refuser
-                        </button>
-                      </div>
+                      {mem.availability && (
+                        <div className="inline-flex items-center text-[11px] font-semibold text-amber-400 bg-amber-500/10 px-2.5 py-1 rounded-md border border-amber-500/20">
+                          ⏱️ Temps disponible : {mem.availability}
+                        </div>
+                      )}
+
+                      {mem.motivation && (
+                        <div className="text-xs text-gray-300 p-2.5 bg-[#14141B] rounded-lg border border-[#242430]">
+                          <span className="text-[10px] uppercase font-bold text-gray-400 block mb-1">🎯 Motivation :</span>
+                          <p className="whitespace-pre-wrap">{mem.motivation}</p>
+                        </div>
+                      )}
+
+                      {mem.skills && (
+                        <div className="text-xs text-gray-300 p-2.5 bg-[#14141B] rounded-lg border border-[#242430]">
+                          <span className="text-[10px] uppercase font-bold text-gray-400 block mb-1">🛠️ Compétences & Projets :</span>
+                          <p className="whitespace-pre-wrap">{mem.skills}</p>
+                        </div>
+                      )}
                     </div>
                   ))}
                 </div>
@@ -677,6 +755,115 @@ export const DepartmentsPage: React.FC = () => {
           </div>
         </Modal>
       )}
+
+      {/* Modal Panneau de Recrutement Discord */}
+      <Modal
+        isOpen={isPanelModalOpen}
+        onClose={() => setIsPanelModalOpen(false)}
+        title="📢 Déployer le Panneau de Recrutement sur Discord"
+      >
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            sendPanelMutation.mutate({
+              channelId: panelChannelId,
+              title: panelTitle,
+              description: panelDescription || undefined
+            });
+          }}
+          className="space-y-4"
+        >
+          {panelFeedback && (
+            <div
+              className={`p-3 rounded-xl text-xs font-bold flex items-center ${
+                panelFeedback.type === 'success'
+                  ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
+                  : 'bg-rose-500/10 text-rose-400 border border-rose-500/20'
+              }`}
+            >
+              {panelFeedback.type === 'success' ? (
+                <CheckCircle2 className="w-4 h-4 mr-2 text-emerald-400" />
+              ) : (
+                <AlertCircle className="w-4 h-4 mr-2 text-rose-400" />
+              )}
+              {panelFeedback.message}
+            </div>
+          )}
+
+          <div>
+            <label className="block text-xs font-semibold text-gray-300 uppercase tracking-wider mb-1.5">
+              Salon Discord d'affichage *
+            </label>
+            <select
+              required
+              value={panelChannelId}
+              onChange={(e) => setPanelChannelId(e.target.value)}
+              className="w-full bg-[#1A1A22] border border-[#2E2E3C] rounded-xl px-4 py-2.5 text-sm text-gray-100 focus:outline-none focus:border-[#E5092E] transition"
+            >
+              <option value="">Sélectionnez un salon textuel...</option>
+              {channels
+                .filter((c: any) => c.type === 'text' || c.type === 0)
+                .map((c: any) => (
+                  <option key={c.id} value={c.id}>
+                    #{c.name}
+                  </option>
+                ))}
+            </select>
+            <p className="text-[11px] text-gray-500 mt-1">
+              Les membres y verront l'embed avec les boutons et le menu déroulant de choix de pôle.
+            </p>
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold text-gray-300 uppercase tracking-wider mb-1.5">
+              Titre du Panneau
+            </label>
+            <input
+              type="text"
+              value={panelTitle}
+              onChange={(e) => setPanelTitle(e.target.value)}
+              placeholder="🔴 CORTEX SCIENTIFIC CLUB — PÔLES & CANDIDATURES"
+              className="w-full bg-[#1A1A22] border border-[#2E2E3C] rounded-xl px-4 py-2.5 text-sm text-gray-100 focus:outline-none focus:border-[#E5092E] transition"
+            />
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold text-gray-300 uppercase tracking-wider mb-1.5">
+              Description personnalisée (optionnel)
+            </label>
+            <textarea
+              rows={3}
+              value={panelDescription}
+              onChange={(e) => setPanelDescription(e.target.value)}
+              placeholder="Laissez vide pour afficher le texte explicatif officiel CORTEX."
+              className="w-full bg-[#1A1A22] border border-[#2E2E3C] rounded-xl px-4 py-2 text-sm text-gray-100 focus:outline-none focus:border-[#E5092E] transition resize-none"
+            />
+          </div>
+
+          <div className="p-3 bg-[#1A1A22] rounded-xl border border-[#2E2E3C] text-xs text-gray-400">
+            <span className="font-bold text-white block mb-1">💡 Expérience membre Discord :</span>
+            Un embed CORTEX récapitule vos {departments.length} pôle(s) actif(s). Le membre sélectionne un pôle, ce qui ouvre instantanément un <strong>formulaire modal Discord</strong> (Motivations, Compétences & Projets, Disponibilité). Sa candidature apparaîtra ensuite ici et dans votre salon de modération !
+          </div>
+
+          <div className="flex justify-end space-x-3 pt-2">
+            <button
+              type="button"
+              onClick={() => setIsPanelModalOpen(false)}
+              className="px-4 py-2 bg-gray-800 hover:bg-gray-700 text-gray-300 text-xs font-semibold rounded-xl transition"
+            >
+              Annuler
+            </button>
+            <button
+              type="submit"
+              disabled={sendPanelMutation.isPending || !panelChannelId}
+              className="px-5 py-2 bg-[#E5092E] hover:bg-[#c00725] disabled:opacity-50 text-white text-xs font-bold rounded-xl transition shadow-md shadow-[#E5092E]/25 flex items-center"
+            >
+              <Send className="w-3.5 h-3.5 mr-2" />
+              {sendPanelMutation.isPending ? 'Envoi en cours...' : 'Envoyer dans le salon'}
+            </button>
+          </div>
+        </form>
+      </Modal>
 
       {/* Confirmation d'Archivage / Suppression */}
       {deletingDept && (

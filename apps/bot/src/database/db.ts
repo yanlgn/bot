@@ -35,6 +35,9 @@ try {
     db.exec(schemaSql);
     try { db.exec('ALTER TABLE projects ADD COLUMN department_id TEXT;'); } catch {}
     try { db.exec('ALTER TABLE resources ADD COLUMN department_id TEXT;'); } catch {}
+    try { db.exec('ALTER TABLE department_members ADD COLUMN motivation TEXT;'); } catch {}
+    try { db.exec('ALTER TABLE department_members ADD COLUMN skills TEXT;'); } catch {}
+    try { db.exec('ALTER TABLE department_members ADD COLUMN availability TEXT;'); } catch {}
     logger.info('📦 Schéma SQLite SciClub initialisé avec succès.');
   } else {
     logger.warn(`⚠️ Fichier schema.sql introuvable à ${schemaPath}.`);

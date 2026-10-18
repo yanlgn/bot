@@ -1,12 +1,13 @@
-import { SlashCommandBuilder, ChatInputCommandInteraction, PermissionFlagsBits, ChannelType, CategoryChannel } from 'discord.js';
+import { SlashCommandBuilder, ChatInputCommandInteraction, PermissionFlagsBits, ChannelType, CategoryChannel, EmbedBuilder } from 'discord.js';
 import { ConfigService } from '../../services/configService.js';
 import { RoleService } from '../../services/roleService.js';
 import { ChannelService } from '../../services/channelService.js';
 import { PermissionService } from '../../services/permissionService.js';
+import { hexToDecimalColor } from '@sciclub/shared';
 
 export const data = new SlashCommandBuilder()
   .setName('sync')
-  .setDescription('Synchronise entièrement le serveur Discord selon le fichier de configuration JSON')
+  .setDescription('Synchronise entièrement le serveur Discord selon le fichier de configuration JSON CORTEX')
   .setDefaultMemberPermissions(PermissionFlagsBits.Administrator);
 
 export async function execute(interaction: ChatInputCommandInteraction) {
@@ -17,7 +18,7 @@ export async function execute(interaction: ChatInputCommandInteraction) {
   const config = ConfigService.getGuildConfig(interaction.guild.id);
   if (!config) {
     await interaction.editReply({
-      content: `❌ Aucun fichier de configuration trouvé (\`${interaction.guild.id}.json\`).`
+      content: `❌ Aucun fichier de configuration trouvé pour ce serveur (\`${interaction.guild.id}.json\`). Ouvrez le Dashboard Web CORTEX pour l'initialiser.`
     });
     return;
   }
@@ -39,9 +40,9 @@ export async function execute(interaction: ChatInputCommandInteraction) {
         found = await interaction.guild.channels.create({
           name: cat.name,
           type: ChannelType.GuildCategory,
-          reason: 'SciClub Sync : Création de la catégorie configurée'
+          reason: 'CORTEX Sync : Création de la catégorie configurée'
         });
-        logs.push(`📁 Catégorie créée : "${cat.name}"`);
+        logs.push(`📁 Catégorie : "${cat.name}" créée`);
       }
       categoryKeyToId.set(cat.key, found.id);
     }
@@ -64,7 +65,7 @@ export async function execute(interaction: ChatInputCommandInteraction) {
           },
           operator
         );
-        logs.push(`🏷️ Rôle créé : "${roleDef.name}"`);
+        logs.push(`🏷️ Rôle : "${roleDef.name}" créé`);
       }
       roleKeyToId.set(`role:${key}`, found.id);
     }
@@ -90,14 +91,68 @@ export async function execute(interaction: ChatInputCommandInteraction) {
           },
           operator
         );
-        logs.push(`💬 Salon créé : #${chDef.name}`);
+        logs.push(`💬 Salon : #${chDef.name} créé`);
         channelKeyToId.set(key, created.id);
       } else {
         channelKeyToId.set(key, found.id);
       }
     }
 
-    // 4. Synchronisation des permissions de salon
+    // 4. Synchronisation des départements déclarés
+    if (config.departments && config.departments.length > 0) {
+      for (const dept of config.departments) {
+        let catId = dept.categoryId;
+        const catName = dept.categoryName || `${dept.icon || '🔬'} PÔLE ${dept.name.toUpperCase()}`;
+
+        if (!catId) {
+          let foundCat = existingCategories.find(c => c && c.name.toLowerCase() === catName.toLowerCase());
+          if (!foundCat) {
+            foundCat = await interaction.guild.channels.create({
+              name: catName,
+              type: ChannelType.GuildCategory,
+              reason: `CORTEX Sync : Pôle ${dept.name}`
+            });
+            logs.push(`🔬 Pôle Catégorie : "${catName}" créée`);
+          }
+          catId = foundCat.id;
+          dept.categoryId = catId;
+        }
+
+        if (!dept.leaderRoleId) {
+          const leaderName = `Chef Pôle ${dept.shortName || dept.name}`;
+          let foundLeader = existingRoles.find(r => r.name.toLowerCase() === leaderName.toLowerCase());
+          if (!foundLeader) {
+            foundLeader = await interaction.guild.roles.create({
+              name: leaderName,
+              color: hexToDecimalColor(dept.color || '#E5092E'),
+              hoist: true,
+              mentionable: true,
+              reason: `CORTEX Sync : Chef de pôle ${dept.name}`
+            });
+            logs.push(`🎖️ Rôle Chef : "${leaderName}" créé`);
+          }
+          dept.leaderRoleId = foundLeader.id;
+        }
+
+        if (!dept.memberRoleId) {
+          const memberName = `Membre ${dept.shortName || dept.name}`;
+          let foundMember = existingRoles.find(r => r.name.toLowerCase() === memberName.toLowerCase());
+          if (!foundMember) {
+            foundMember = await interaction.guild.roles.create({
+              name: memberName,
+              color: hexToDecimalColor(dept.color || '#E5092E'),
+              hoist: false,
+              mentionable: true,
+              reason: `CORTEX Sync : Membre pôle ${dept.name}`
+            });
+            logs.push(`👥 Rôle Membre : "${memberName}" créé`);
+          }
+          dept.memberRoleId = foundMember.id;
+        }
+      }
+    }
+
+    // 5. Synchronisation des permissions déclaratives
     if (config.channelPermissions) {
       for (const rule of config.channelPermissions) {
         const channelId = channelKeyToId.get(rule.channelKey);
@@ -122,9 +177,18 @@ export async function execute(interaction: ChatInputCommandInteraction) {
       logs.push('🔒 Permissions déclaratives appliquées aux salons');
     }
 
-    await interaction.editReply({
-      content: `✅ **Synchronisation terminée avec succès !**\n\n${logs.length > 0 ? logs.join('\n') : 'Tout est déjà parfaitement synchronisé avec la configuration.'}`
-    });
+    const embed = new EmbedBuilder()
+      .setTitle('✅ Synchronisation CORTEX Réussie')
+      .setColor(0x10B981)
+      .setDescription(
+        logs.length > 0
+          ? `Le serveur Discord a été mis en conformité avec la configuration déclarative :\n\n${logs.join('\n')}`
+          : 'Le serveur Discord est déjà 100% conforme à votre fichier de configuration JSON.'
+      )
+      .setFooter({ text: 'CORTEX Scientific Club • Pilotage Déclaratif' })
+      .setTimestamp();
+
+    await interaction.editReply({ embeds: [embed] });
   } catch (err: any) {
     await interaction.editReply({ content: `❌ Erreur pendant la synchronisation : ${err.message}` });
   }
