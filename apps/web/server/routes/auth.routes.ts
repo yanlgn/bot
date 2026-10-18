@@ -2,6 +2,7 @@ import { Router, Request, Response } from 'express';
 import { randomBytes } from 'crypto';
 import rateLimit from 'express-rate-limit';
 import { logger } from '../botClient.js';
+import { db } from '../db.js';
 
 export const authRouter = Router();
 
@@ -113,7 +114,26 @@ authRouter.get('/callback', async (req: Request, res: Response) => {
       avatar: string | null;
     };
 
-    // 3. Sauvegarde dans la session serveur uniquement avec confirmation explicite
+    // 3. Génération d'un token d'authentification persistant
+    const authToken = randomBytes(32).toString('hex');
+
+    try {
+      db.prepare(`
+        INSERT INTO sessions (token, user_id, username, discriminator, avatar, access_token, expires_at)
+        VALUES (?, ?, ?, ?, ?, ?, datetime('now', '+14 days'))
+      `).run(
+        authToken,
+        userData.id,
+        userData.username,
+        userData.discriminator,
+        userData.avatar,
+        tokenData.access_token
+      );
+    } catch (dbErr) {
+      logger.error({ dbErr }, 'Erreur lors de l\'enregistrement du token de session en base');
+    }
+
+    // 4. Sauvegarde également dans la session express (si les cookies sont acceptés par le navigateur)
     req.session.user = {
       id: userData.id,
       username: userData.username,
@@ -122,14 +142,9 @@ authRouter.get('/callback', async (req: Request, res: Response) => {
       accessToken: tokenData.access_token
     };
 
-    req.session.save((err) => {
-      if (err) {
-        logger.error({ err }, 'Erreur lors de la persistance de session utilisateur');
-        return res.redirect('/login?error=session_save_failed');
-      }
-
+    req.session.save(() => {
       logger.info({ user: userData.username }, 'Utilisateur authentifié avec succès via Discord OAuth2');
-      res.redirect('/guilds');
+      res.redirect(`/guilds?auth_token=${authToken}`);
     });
   } catch (error) {
     logger.error({ error }, 'Erreur lors du callback OAuth2');
@@ -142,12 +157,24 @@ authRouter.get('/callback', async (req: Request, res: Response) => {
  * Déconnecte l'utilisateur et détruit la session
  */
 authRouter.post('/logout', (req: Request, res: Response) => {
-  req.session.destroy(err => {
-    if (err) {
-      return res.status(500).json({ success: false, error: 'Impossible de détruire la session' });
-    }
+  const authHeader = req.headers.authorization;
+  const token = authHeader && authHeader.startsWith('Bearer ') ? authHeader.slice(7).trim() : null;
+
+  if (token) {
+    try {
+      db.prepare('DELETE FROM sessions WHERE token = ?').run(token);
+    } catch {}
+  }
+
+  if (req.session) {
+    req.session.destroy(() => {
+      res.clearCookie('sciclub_session');
+      res.clearCookie('cortex_session');
+      res.json({ success: true, message: 'Déconnexion réussie.' });
+    });
+  } else {
     res.clearCookie('sciclub_session');
     res.clearCookie('cortex_session');
     res.json({ success: true, message: 'Déconnexion réussie.' });
-  });
+  }
 });

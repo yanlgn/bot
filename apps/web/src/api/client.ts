@@ -10,6 +10,12 @@ export async function apiFetch<T>(endpoint: string, options: RequestInit = {}): 
     headers.set('Content-Type', 'application/json');
   }
 
+  // Token persistant pour immuniser l'auth contre les blocages de cookies tiers/cross-site
+  const token = localStorage.getItem('cortex_token');
+  if (token && !headers.has('Authorization')) {
+    headers.set('Authorization', `Bearer ${token}`);
+  }
+
   const response = await fetch(url, {
     ...options,
     headers,

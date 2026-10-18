@@ -1,10 +1,18 @@
-import React from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams, useNavigate } from 'react-router-dom';
 import { ShieldCheck, Cpu, Sparkles, Atom, AlertCircle } from 'lucide-react';
+import { useAuth } from '../context/AuthContext';
 
 export const Login: React.FC = () => {
   const [searchParams] = useSearchParams();
+  const navigate = useNavigate();
+  const { user, loading } = useAuth();
   const error = searchParams.get('error');
+
+  React.useEffect(() => {
+    if (!loading && user) {
+      navigate('/guilds');
+    }
+  }, [loading, user, navigate]);
 
   const errorMessages: Record<string, string> = {
     invalid_state: 'La session d\'authentification a expiré. Veuillez réessayer.',

@@ -28,3 +28,21 @@ try {
 try { db.exec('ALTER TABLE projects ADD COLUMN department_id TEXT;'); } catch {}
 try { db.exec('ALTER TABLE resources ADD COLUMN department_id TEXT;'); } catch {}
 
+// Table des sessions persistantes pour garantir l'authentification
+try {
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS sessions (
+      token TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL,
+      username TEXT NOT NULL,
+      discriminator TEXT DEFAULT '0',
+      avatar TEXT,
+      access_token TEXT NOT NULL,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      expires_at DATETIME NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_sessions_expires ON sessions(expires_at);
+  `);
+} catch {}
+
+

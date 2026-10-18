@@ -8,6 +8,17 @@ CREATE TABLE IF NOT EXISTS users (
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 
+CREATE TABLE IF NOT EXISTS sessions (
+  token TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL,
+  username TEXT NOT NULL,
+  discriminator TEXT DEFAULT '0',
+  avatar TEXT,
+  access_token TEXT NOT NULL,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  expires_at DATETIME NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS guilds (
   id TEXT PRIMARY KEY,
   name TEXT NOT NULL,

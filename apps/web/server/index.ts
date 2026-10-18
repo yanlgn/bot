@@ -22,7 +22,7 @@ const isProduction = process.env.NODE_ENV === 'production';
 const PORT = process.env.PORT || 3001;
 
 // Nécessaire derrière le reverse proxy HTTPS de Render
-app.enable('trust proxy');
+app.set('trust proxy', 1);
 
 // Sécurité Web
 app.use(helmet({
@@ -41,14 +41,14 @@ app.use(express.urlencoded({ extended: true }));
 app.use(session({
   name: 'cortex_session',
   secret: process.env.SESSION_SECRET || 'cortex_secret_key_session_secure_2026_xyz',
-  resave: true,
+  resave: false,
   saveUninitialized: false,
   cookie: {
     httpOnly: true,
-    secure: false,
+    secure: 'auto',
     sameSite: 'lax',
     path: '/',
-    maxAge: 7 * 24 * 60 * 60 * 1000 // 7 jours
+    maxAge: 14 * 24 * 60 * 60 * 1000 // 14 jours
   }
 }));
 

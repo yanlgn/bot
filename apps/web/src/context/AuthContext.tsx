@@ -39,6 +39,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const refreshUser = async () => {
     try {
       setLoading(true);
+
+      // Récupérer et stocker le token transmis dans l'URL après le callback OAuth2
+      const urlParams = new URLSearchParams(window.location.search);
+      const tokenFromUrl = urlParams.get('auth_token');
+      if (tokenFromUrl) {
+        localStorage.setItem('cortex_token', tokenFromUrl);
+        urlParams.delete('auth_token');
+        const cleanSearch = urlParams.toString();
+        const cleanUrl = window.location.pathname + (cleanSearch ? `?${cleanSearch}` : '');
+        window.history.replaceState({}, document.title, cleanUrl);
+      }
+
       const data = await apiFetch<UserProfile>('/me');
       setUser(data);
 
@@ -48,6 +60,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
     } catch {
       setUser(null);
+      localStorage.removeItem('cortex_token');
     } finally {
       setLoading(false);
     }
@@ -67,6 +80,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       await apiFetch('/auth/logout', { method: 'POST' });
     } catch {}
     setUser(null);
+    localStorage.removeItem('cortex_token');
     localStorage.removeItem('sciclub_active_guild');
     window.location.href = '/login';
   };
