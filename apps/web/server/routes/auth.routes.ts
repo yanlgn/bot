@@ -14,11 +14,19 @@ const authLimiter = rateLimit({
 
 authRouter.use(authLimiter);
 
-function getRedirectUri(req: Request): string {
+function getLoginRedirectUri(req: Request): string {
   if (process.env.DISCORD_REDIRECT_URI) return process.env.DISCORD_REDIRECT_URI;
   const proto = req.headers['x-forwarded-proto'] || req.protocol;
   const host = req.get('host');
-  return host ? `${proto}://${host}/api/auth/callback` : 'http://localhost:3001/api/auth/callback';
+  return host ? `${proto}://${host}/admin/auth/discord/callback` : 'http://localhost:3001/admin/auth/discord/callback';
+}
+
+function getCallbackRedirectUri(req: Request): string {
+  if (process.env.DISCORD_REDIRECT_URI) return process.env.DISCORD_REDIRECT_URI;
+  const proto = req.headers['x-forwarded-proto'] || req.protocol;
+  const host = req.get('host');
+  const pathWithoutQuery = req.originalUrl.split('?')[0];
+  return `${proto}://${host}${pathWithoutQuery}`;
 }
 
 function getFrontendUrl(req: Request): string {
@@ -29,12 +37,11 @@ function getFrontendUrl(req: Request): string {
 }
 
 /**
- * GET /api/auth/login
- * Redirige vers la page d'autorisation Discord OAuth2 avec state CSRF
+ * Handler de login OAuth2
  */
-authRouter.get('/login', (req: Request, res: Response) => {
+export const handleOAuthLogin = (req: Request, res: Response) => {
   const clientId = process.env.DISCORD_CLIENT_ID || '1350228159005724772';
-  const redirectUri = encodeURIComponent(getRedirectUri(req));
+  const redirectUri = encodeURIComponent(getLoginRedirectUri(req));
   const state = randomBytes(16).toString('hex');
 
   req.session.oauthState = state;
@@ -48,16 +55,15 @@ authRouter.get('/login', (req: Request, res: Response) => {
     }
     res.redirect(authUrl);
   });
-});
+};
 
 /**
- * GET /api/auth/callback
- * Échange le code contre un token, récupère le profil utilisateur et initie la session
+ * Handler universel du callback OAuth2
  */
-authRouter.get('/callback', async (req: Request, res: Response) => {
+export const handleOAuthCallback = async (req: Request, res: Response) => {
   const { code, state } = req.query;
   const frontendUrl = getFrontendUrl(req);
-  const redirectUri = getRedirectUri(req);
+  const redirectUri = getCallbackRedirectUri(req);
 
   if (!code) {
     logger.warn('Aucun code OAuth2 fourni dans le callback');
@@ -150,7 +156,11 @@ authRouter.get('/callback', async (req: Request, res: Response) => {
     logger.error({ error }, 'Erreur lors du callback OAuth2');
     res.redirect(`${frontendUrl}/login?error=server_error`);
   }
-});
+};
+
+authRouter.get('/login', handleOAuthLogin);
+authRouter.get('/callback', handleOAuthCallback);
+authRouter.get('/discord/callback', handleOAuthCallback);
 
 /**
  * POST /api/auth/logout

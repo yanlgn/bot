@@ -8,6 +8,7 @@ import { fileURLToPath } from 'url';
 import dotenv from 'dotenv';
 import { logger, initDiscordClient } from './botClient.js';
 import { apiRouter } from './routes/index.js';
+import { handleOAuthLogin, handleOAuthCallback } from './routes/auth.routes.js';
 import { errorHandler } from './middleware/errorHandler.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -60,6 +61,13 @@ if (pinoHttpMiddleware) {
 
 // Routes API
 app.use('/api', apiRouter);
+
+// Routes OAuth2 directes (supporte tous les schémas enregistrés dans Discord Developer Portal)
+app.get('/admin/auth/discord/callback', handleOAuthCallback);
+app.get('/admin/auth/discord', handleOAuthLogin);
+app.get('/auth/discord/callback', handleOAuthCallback);
+app.get('/auth/discord', handleOAuthLogin);
+app.get('/auth/callback', handleOAuthCallback);
 
 // Service des fichiers statiques du frontend en production
 if (isProduction) {
