@@ -22,13 +22,16 @@ const app = express();
 const isProduction = process.env.NODE_ENV === 'production';
 const PORT = process.env.PORT || 3001;
 
+// Nécessaire derrière le reverse proxy HTTPS de Render
+app.set('trust proxy', 1);
+
 // Sécurité Web
 app.use(helmet({
   contentSecurityPolicy: isProduction ? undefined : false
 }));
 
 app.use(cors({
-  origin: process.env.FRONTEND_URL || 'http://localhost:5173',
+  origin: true,
   credentials: true
 }));
 

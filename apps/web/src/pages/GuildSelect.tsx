@@ -9,11 +9,26 @@ export const GuildSelect: React.FC = () => {
   const { user, setActiveGuildId, refreshUser, loading } = useAuth();
   const navigate = useNavigate();
 
+  React.useEffect(() => {
+    if (!loading && !user) {
+      navigate('/login');
+    }
+  }, [loading, user, navigate]);
+
   const handleSelect = (guild: UserGuild) => {
     if (!guild.hasBot) return;
     setActiveGuildId(guild.id);
     navigate(`/dashboard/${guild.id}`);
   };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-[#0B0B0D] flex flex-col items-center justify-center">
+        <img src="/cortex-emblem.png" alt="CORTEX" className="w-16 h-16 rounded-full animate-pulse mb-4" />
+        <p className="text-gray-400 text-sm font-medium">Chargement de vos serveurs...</p>
+      </div>
+    );
+  }
 
   const guilds = user?.guilds || [];
   const activeGuilds = guilds.filter(g => g.hasBot);

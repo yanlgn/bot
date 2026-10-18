@@ -13,13 +13,27 @@ const authLimiter = rateLimit({
 
 authRouter.use(authLimiter);
 
+function getRedirectUri(req: Request): string {
+  if (process.env.DISCORD_REDIRECT_URI) return process.env.DISCORD_REDIRECT_URI;
+  const proto = req.headers['x-forwarded-proto'] || req.protocol;
+  const host = req.get('host');
+  return host ? `${proto}://${host}/api/auth/callback` : 'http://localhost:3001/api/auth/callback';
+}
+
+function getFrontendUrl(req: Request): string {
+  if (process.env.FRONTEND_URL) return process.env.FRONTEND_URL;
+  const proto = req.headers['x-forwarded-proto'] || req.protocol;
+  const host = req.get('host');
+  return host ? `${proto}://${host}` : 'http://localhost:5173';
+}
+
 /**
  * GET /api/auth/login
  * Redirige vers la page d'autorisation Discord OAuth2 avec state CSRF
  */
 authRouter.get('/login', (req: Request, res: Response) => {
   const clientId = process.env.DISCORD_CLIENT_ID || '1350228159005724772';
-  const redirectUri = encodeURIComponent(process.env.DISCORD_REDIRECT_URI || 'http://localhost:3001/api/auth/callback');
+  const redirectUri = encodeURIComponent(getRedirectUri(req));
   const state = randomBytes(16).toString('hex');
 
   req.session.oauthState = state;
@@ -36,7 +50,8 @@ authRouter.get('/login', (req: Request, res: Response) => {
  */
 authRouter.get('/callback', async (req: Request, res: Response) => {
   const { code, state } = req.query;
-  const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
+  const frontendUrl = getFrontendUrl(req);
+  const redirectUri = getRedirectUri(req);
 
   if (!code || !state || state !== req.session.oauthState) {
     logger.warn('Échec de la validation de l\'état OAuth2 (CSRF détecté ou état invalide)');
@@ -51,7 +66,7 @@ authRouter.get('/callback', async (req: Request, res: Response) => {
       client_secret: process.env.DISCORD_CLIENT_SECRET!,
       grant_type: 'authorization_code',
       code: code as string,
-      redirect_uri: process.env.DISCORD_REDIRECT_URI || 'http://localhost:3001/api/auth/callback'
+      redirect_uri: redirectUri
     });
 
     // 1. Échange du code d'autorisation
