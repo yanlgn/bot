@@ -143,19 +143,40 @@ export async function handleDepartmentModalSubmit(interaction: ModalSubmitIntera
 
   await interaction.reply({ embeds: [userConfirmEmbed], ephemeral: true });
 
-  // Notifier le salon staff Discord
+  // Notifier le salon candidature du pôle Discord
   try {
     let notifyChannel: TextChannel | null = null;
     const guild = interaction.guild;
     const channels = await guild.channels.fetch();
 
-    // 1. Chercher un salon avec "candidature", "staff", "admin", "recrutement" ou "logs"
-    notifyChannel = channels.find(c =>
-      c && c.isTextBased() &&
-      (c.name.includes('candidature') || c.name.includes('staff') || c.name.includes('recrutement') || c.name.includes('admin') || c.name.includes('logs'))
-    ) as TextChannel | null;
+    // 1. Chercher en priorité un salon "candidatures" dans la catégorie du pôle
+    if (dept.category_id) {
+      notifyChannel = channels.find(c =>
+        c && c.isTextBased() &&
+        c.parentId === dept.category_id &&
+        c.name.includes('candidat')
+      ) as TextChannel | null;
+    }
 
-    // 2. Si non trouvé, chercher le premier salon dans la catégorie du pôle
+    // 2. Si non trouvé dans la catégorie, chercher un salon dédié aux candidatures de ce pôle
+    if (!notifyChannel) {
+      const slug = (dept.short_name || dept.name).toLowerCase().replace(/[^a-z0-9]/g, '');
+      notifyChannel = channels.find(c => {
+        if (!c || !c.isTextBased()) return false;
+        const cName = c.name.toLowerCase().replace(/[^a-z0-9]/g, '');
+        return cName.includes('candidat') && (slug.length > 2 ? cName.includes(slug) : false);
+      }) as TextChannel | null;
+    }
+
+    // 3. Si non trouvé, chercher un salon général de candidatures ou staff
+    if (!notifyChannel) {
+      notifyChannel = channels.find(c =>
+        c && c.isTextBased() &&
+        (c.name.includes('candidat') || c.name.includes('recrutement') || c.name.includes('staff') || c.name.includes('admin') || c.name.includes('logs'))
+      ) as TextChannel | null;
+    }
+
+    // 4. Si non trouvé, chercher le premier salon textuel de la catégorie du pôle
     if (!notifyChannel && dept.category_id) {
       notifyChannel = channels.find(c => c && c.isTextBased() && c.parentId === dept.category_id) as TextChannel | null;
     }
@@ -188,8 +209,13 @@ export async function handleDepartmentModalSubmit(interaction: ModalSubmitIntera
           .setEmoji('❌')
       );
 
+      const pings = [
+        dept.leader_role_id ? `<@&${dept.leader_role_id}>` : null,
+        dept.deputy_role_id ? `<@&${dept.deputy_role_id}>` : null
+      ].filter(Boolean).join(' ');
+
       await notifyChannel.send({
-        content: dept.leader_role_id ? `<@&${dept.leader_role_id}>` : undefined,
+        content: pings || undefined,
         embeds: [staffEmbed],
         components: [actionRow]
       });
@@ -218,14 +244,15 @@ export async function handleDepartmentStaffReview(interaction: ButtonInteraction
     return;
   }
 
-  // Vérifier permissions de l'opérateur
+  // Vérifier permissions de l'opérateur (Chef, Adjoint ou Admin)
   const member = await interaction.guild.members.fetch(interaction.user.id);
   const isLeader = dept.leader_role_id && member.roles.cache.has(dept.leader_role_id);
+  const isDeputy = dept.deputy_role_id && member.roles.cache.has(dept.deputy_role_id);
   const isAdmin = member.permissions.has(PermissionFlagsBits.Administrator) || member.permissions.has(PermissionFlagsBits.ManageGuild);
 
-  if (!isLeader && !isAdmin) {
+  if (!isLeader && !isDeputy && !isAdmin) {
     await interaction.reply({
-      content: '⛔ Vous devez être Chef de ce pôle ou Administrateur pour valider ou refuser cette candidature.',
+      content: '⛔ Vous devez être Chef, Adjoint de ce pôle ou Administrateur pour valider ou refuser cette candidature.',
       ephemeral: true
     });
     return;

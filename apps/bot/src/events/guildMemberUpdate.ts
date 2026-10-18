@@ -51,6 +51,7 @@ export async function execute(oldMember: GuildMember | PartialGuildMember, newMe
 
     for (const dept of departments) {
       const leaderRoleId = dept.leader_role_id;
+      const deputyRoleId = dept.deputy_role_id;
       const memberRoleId = dept.member_role_id;
 
       // 1. Chef de pôle (Leader Role)
@@ -73,7 +74,13 @@ export async function execute(oldMember: GuildMember | PartialGuildMember, newMe
           logger.info(`👑 ${newMember.user.tag} est devenu Chef du pôle "${dept.name}" (Discord rôle détecté)`);
         } else if (hadLeader && !hasLeader) {
           // Retiré du rôle chef de pôle
-          if (memberRoleId && newRoles.has(memberRoleId)) {
+          if (deputyRoleId && newRoles.has(deputyRoleId)) {
+            await db.prepare(`
+              UPDATE department_members 
+              SET role = 'deputy', updated_at = datetime('now')
+              WHERE department_id = ? AND user_id = ?
+            `).run(dept.id, newMember.user.id);
+          } else if (memberRoleId && newRoles.has(memberRoleId)) {
             await db.prepare(`
               UPDATE department_members 
               SET role = 'member', updated_at = datetime('now')
@@ -90,15 +97,59 @@ export async function execute(oldMember: GuildMember | PartialGuildMember, newMe
         }
       }
 
-      // 2. Membre de pôle (Member Role)
+      // 2. Adjoint / Vice-Chef de pôle (Deputy Role)
+      if (deputyRoleId) {
+        const hadDeputy = oldRoles.has(deputyRoleId);
+        const hasDeputy = newRoles.has(deputyRoleId);
+
+        if (!hadDeputy && hasDeputy) {
+          // Attribué en adjoint (si pas déjà leader)
+          const isLeader = leaderRoleId && newRoles.has(leaderRoleId);
+          const assignedRole = isLeader ? 'leader' : 'deputy';
+
+          await db.prepare(`
+            INSERT INTO department_members (department_id, guild_id, user_id, role, status, requested_at, reviewed_at)
+            VALUES (?, ?, ?, ?, 'approved', datetime('now'), datetime('now'))
+            ON CONFLICT(department_id, user_id) DO UPDATE SET
+              role = ?,
+              status = 'approved',
+              reviewed_at = datetime('now')
+          `).run(dept.id, guildId, newMember.user.id, assignedRole, assignedRole);
+
+          recordAudit(guildId, newMember.user.id, newMember.user.username, 'DEPARTMENT_DEPUTY_ASSIGNED', dept.id, `Attribué Adjoint du pôle "${dept.name}" via rôle Discord`);
+          logger.info(`🥈 ${newMember.user.tag} est devenu Adjoint du pôle "${dept.name}" (Discord rôle détecté)`);
+        } else if (hadDeputy && !hasDeputy) {
+          // Retiré du rôle adjoint
+          const isLeader = leaderRoleId && newRoles.has(leaderRoleId);
+          if (!isLeader) {
+            if (memberRoleId && newRoles.has(memberRoleId)) {
+              await db.prepare(`
+                UPDATE department_members 
+                SET role = 'member', updated_at = datetime('now')
+                WHERE department_id = ? AND user_id = ?
+              `).run(dept.id, newMember.user.id);
+            } else {
+              await db.prepare(`
+                DELETE FROM department_members
+                WHERE department_id = ? AND user_id = ?
+              `).run(dept.id, newMember.user.id);
+            }
+            recordAudit(guildId, newMember.user.id, newMember.user.username, 'DEPARTMENT_DEPUTY_REMOVED', dept.id, `Retiré du rôle Adjoint du pôle "${dept.name}" via rôle Discord`);
+            logger.info(`🔻 ${newMember.user.tag} n'est plus Adjoint du pôle "${dept.name}"`);
+          }
+        }
+      }
+
+      // 3. Membre de pôle (Member Role)
       if (memberRoleId) {
         const hadMember = oldRoles.has(memberRoleId);
         const hasMember = newRoles.has(memberRoleId);
 
         if (!hadMember && hasMember) {
-          // Attribué en membre de pôle (si pas déjà leader)
+          // Attribué en membre de pôle (si pas déjà leader ou adjoint)
           const isLeader = leaderRoleId && newRoles.has(leaderRoleId);
-          const assignedRole = isLeader ? 'leader' : 'member';
+          const isDeputy = deputyRoleId && newRoles.has(deputyRoleId);
+          const assignedRole = isLeader ? 'leader' : (isDeputy ? 'deputy' : 'member');
 
           await db.prepare(`
             INSERT INTO department_members (department_id, guild_id, user_id, role, status, requested_at, reviewed_at)
@@ -114,7 +165,8 @@ export async function execute(oldMember: GuildMember | PartialGuildMember, newMe
         } else if (hadMember && !hasMember) {
           // Retiré du rôle membre
           const isLeader = leaderRoleId && newRoles.has(leaderRoleId);
-          if (!isLeader) {
+          const isDeputy = deputyRoleId && newRoles.has(deputyRoleId);
+          if (!isLeader && !isDeputy) {
             await db.prepare(`
               DELETE FROM department_members
               WHERE department_id = ? AND user_id = ?

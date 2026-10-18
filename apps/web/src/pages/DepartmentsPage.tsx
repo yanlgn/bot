@@ -32,6 +32,8 @@ interface DepartmentData {
   description: string;
   leaderRoleId?: string;
   leaderRoleName?: string;
+  deputyRoleId?: string;
+  deputyRoleName?: string;
   memberRoleId?: string;
   memberRoleName?: string;
   categoryId?: string;
@@ -48,7 +50,7 @@ interface DepartmentMember {
   displayName: string;
   username: string;
   avatarUrl?: string;
-  role: 'leader' | 'member';
+  role: 'leader' | 'deputy' | 'member';
   status: 'pending' | 'approved' | 'rejected';
   motivation?: string | null;
   skills?: string | null;
@@ -570,7 +572,7 @@ export const DepartmentsPage: React.FC = () => {
                 onChange={e => setCreateRoles(e.target.checked)}
                 className="rounded border-[#2E2E3C] text-[#E5092E] focus:ring-[#E5092E] bg-[#121217]"
               />
-              <span>Créer les rôles <b>Chef Pôle</b> et <b>Membre</b> sur Discord</span>
+              <span>Créer les 3 rôles (<b>Chef Pôle</b>, <b>Adjoint</b> et <b>Membre</b>) sur Discord</span>
             </label>
 
             <label className="flex items-center space-x-3 cursor-pointer text-xs text-gray-300">
@@ -590,7 +592,7 @@ export const DepartmentsPage: React.FC = () => {
                 onChange={e => setCreateChannels(e.target.checked)}
                 className="rounded border-[#2E2E3C] text-[#E5092E] focus:ring-[#E5092E] bg-[#121217]"
               />
-              <span>Générer les 5 salons types (#annonces, #general, #projets, #ressources, Vocal)</span>
+              <span>Générer les salons types (#annonces, #candidatures privé, #general, #projets, #ressources, Vocal)</span>
             </label>
           </div>
 
@@ -729,12 +731,14 @@ export const DepartmentsPage: React.FC = () => {
                       )}
                       <div>
                         <div className="font-semibold text-white">{mem.displayName}</div>
-                        <div className="text-[10px] text-gray-400">{mem.role === 'leader' ? '🎖️ Responsable de Pôle' : 'Membre'}</div>
+                        <div className="text-[10px] text-gray-400">
+                          {mem.role === 'leader' ? '🎖️ Responsable de Pôle' : (mem.role === 'deputy' ? '🥈 Adjoint de Pôle' : 'Membre')}
+                        </div>
                       </div>
                     </div>
 
-                    <Badge variant={mem.role === 'leader' ? 'red' : 'gray'}>
-                      {mem.role === 'leader' ? 'Chef' : 'Membre'}
+                    <Badge variant={mem.role === 'leader' ? 'red' : (mem.role === 'deputy' ? 'blue' : 'gray')}>
+                      {mem.role === 'leader' ? 'Chef' : (mem.role === 'deputy' ? 'Adjoint' : 'Membre')}
                     </Badge>
                   </div>
                 ))}

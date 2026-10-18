@@ -67,6 +67,7 @@ export interface DepartmentConfigItem {
   color?: string;
   description?: string;
   leaderRoleId?: string | null;
+  deputyRoleId?: string | null;
   memberRoleId?: string | null;
   categoryId?: string | null;
   categoryName?: string;

@@ -15,6 +15,7 @@ export const DepartmentConfigItemSchema = z.object({
   color: z.string().regex(/^#([0-9A-Fa-f]{6})$/, 'Format hexadécimal requis (ex: #E5092E)').default('#E5092E'),
   description: z.string().max(1000).default(''),
   leaderRoleId: z.string().optional().nullable(),
+  deputyRoleId: z.string().optional().nullable(),
   memberRoleId: z.string().optional().nullable(),
   categoryId: z.string().optional().nullable(),
   categoryName: z.string().max(100).optional(),
@@ -28,6 +29,7 @@ export const CreateDepartmentSchema = z.object({
   color: z.string().regex(/^#([0-9A-Fa-f]{6})$/, 'Couleur hexadécimale invalide').default('#E5092E'),
   description: z.string().max(1000).default(''),
   leaderUserId: z.string().optional().nullable(),
+  deputyUserId: z.string().optional().nullable(),
   createChannels: z.boolean().default(true),
   createRoles: z.boolean().default(true),
   createCategory: z.boolean().default(true)
@@ -40,6 +42,7 @@ export const UpdateDepartmentSchema = z.object({
   color: z.string().regex(/^#([0-9A-Fa-f]{6})$/).optional(),
   description: z.string().max(1000).optional(),
   leaderRoleId: z.string().optional().nullable(),
+  deputyRoleId: z.string().optional().nullable(),
   memberRoleId: z.string().optional().nullable(),
   categoryId: z.string().optional().nullable()
 });

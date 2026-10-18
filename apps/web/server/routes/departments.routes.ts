@@ -55,11 +55,13 @@ departmentsRouter.get('/', requireAuth, async (req: Request, res: Response) => {
     const guild = discordClient.guilds.cache.get(guildId);
     const enriched = departments.map(dept => {
       let leaderRoleName = null;
+      let deputyRoleName = null;
       let memberRoleName = null;
       let categoryName = null;
 
       if (guild) {
         if (dept.leader_role_id) leaderRoleName = guild.roles.cache.get(dept.leader_role_id)?.name || null;
+        if (dept.deputy_role_id) deputyRoleName = guild.roles.cache.get(dept.deputy_role_id)?.name || null;
         if (dept.member_role_id) memberRoleName = guild.roles.cache.get(dept.member_role_id)?.name || null;
         if (dept.category_id) categoryName = guild.channels.cache.get(dept.category_id)?.name || null;
       }
@@ -74,6 +76,8 @@ departmentsRouter.get('/', requireAuth, async (req: Request, res: Response) => {
         description: dept.description,
         leaderRoleId: dept.leader_role_id,
         leaderRoleName,
+        deputyRoleId: dept.deputy_role_id,
+        deputyRoleName,
         memberRoleId: dept.member_role_id,
         memberRoleName,
         categoryId: dept.category_id,
@@ -112,6 +116,7 @@ departmentsRouter.post('/', requireAuth, requireGuildAdmin, validateBody(CreateD
 
   try {
     let leaderRole = null;
+    let deputyRole = null;
     let memberRole = null;
     let category = null;
     const createdChannelsList: Array<{ name: string; type: 'text' | 'voice'; topic?: string; readonly?: boolean }> = [];
@@ -127,6 +132,14 @@ departmentsRouter.post('/', requireAuth, requireGuildAdmin, validateBody(CreateD
         reason: `Cortex : Création du pôle ${body.name}`
       });
 
+      deputyRole = await guild.roles.create({
+        name: `Adjoint Pôle ${body.shortName || body.name}`,
+        color: colorDec,
+        hoist: true,
+        mentionable: true,
+        reason: `Cortex : Création du pôle ${body.name}`
+      });
+
       memberRole = await guild.roles.create({
         name: `Membre ${body.shortName || body.name}`,
         color: colorDec,
@@ -135,11 +148,19 @@ departmentsRouter.post('/', requireAuth, requireGuildAdmin, validateBody(CreateD
         reason: `Cortex : Création du pôle ${body.name}`
       });
 
-      // Si un chef a été désigné, lui assigner le rôle
+      // Si un chef a été désigné, lui assigner les rôles
       if (body.leaderUserId) {
         const leaderMember = await guild.members.fetch(body.leaderUserId).catch(() => null);
         if (leaderMember) {
           await leaderMember.roles.add([leaderRole.id, memberRole.id]).catch(() => null);
+        }
+      }
+
+      // Si un adjoint a été désigné, lui assigner les rôles
+      if (body.deputyUserId) {
+        const deputyMember = await guild.members.fetch(body.deputyUserId).catch(() => null);
+        if (deputyMember) {
+          await deputyMember.roles.add([deputyRole.id, memberRole.id]).catch(() => null);
         }
       }
     }
@@ -157,6 +178,7 @@ departmentsRouter.post('/', requireAuth, requireGuildAdmin, validateBody(CreateD
     if (body.createChannels && category) {
       const channelConfigs = [
         { name: `annonces-${slug}`, type: 'text' as const, topic: `Annonces officielles du pôle ${body.name}`, readonly: true },
+        { name: `candidatures-${slug}`, type: 'text' as const, topic: `Examen et validation des candidatures du pôle ${body.name}` },
         { name: `general-${slug}`, type: 'text' as const, topic: `Échanges scientifiques & discussions ${body.name}` },
         { name: `projets-${slug}`, type: 'text' as const, topic: `Projets et innovations du pôle ${body.name}` },
         { name: `ressources-${slug}`, type: 'text' as const, topic: `Partage de veille, articles et cours ${body.name}` },
@@ -173,6 +195,27 @@ departmentsRouter.post('/', requireAuth, requireGuildAdmin, validateBody(CreateD
           reason: `Cortex : Salon pôle ${body.name}`
         });
 
+        // Salon de candidatures : privé pour le Chef, l'Adjoint et le Staff
+        if (ch.name.startsWith('candidatures-') && chType === ChannelType.GuildText) {
+          await (createdCh as TextChannel).permissionOverwrites.edit(guild.id, {
+            ViewChannel: false
+          }).catch(() => null);
+          if (leaderRole) {
+            await (createdCh as TextChannel).permissionOverwrites.edit(leaderRole.id, {
+              ViewChannel: true,
+              SendMessages: true,
+              ReadMessageHistory: true
+            }).catch(() => null);
+          }
+          if (deputyRole) {
+            await (createdCh as TextChannel).permissionOverwrites.edit(deputyRole.id, {
+              ViewChannel: true,
+              SendMessages: true,
+              ReadMessageHistory: true
+            }).catch(() => null);
+          }
+        }
+
         // Verrouillage lecture seule pour le salon d'annonces
         if (ch.readonly && chType === ChannelType.GuildText) {
           await (createdCh as TextChannel).permissionOverwrites.edit(guild.id, {
@@ -183,18 +226,23 @@ departmentsRouter.post('/', requireAuth, requireGuildAdmin, validateBody(CreateD
               SendMessages: true
             }).catch(() => null);
           }
+          if (deputyRole) {
+            await (createdCh as TextChannel).permissionOverwrites.edit(deputyRole.id, {
+              SendMessages: true
+            }).catch(() => null);
+          }
         }
 
         createdChannelsList.push(ch);
       }
     }
 
-    // 4. Enregistrement Base SQLite
+    // 4. Enregistrement Base
     await db.prepare(`
       INSERT INTO departments (
         id, guild_id, name, short_name, icon, color, description, 
-        leader_role_id, member_role_id, category_id, is_archived, created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, false, datetime('now'), datetime('now'))
+        leader_role_id, deputy_role_id, member_role_id, category_id, is_archived, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, false, datetime('now'), datetime('now'))
     `).run(
       deptId,
       guild.id,
@@ -204,6 +252,7 @@ departmentsRouter.post('/', requireAuth, requireGuildAdmin, validateBody(CreateD
       body.color || '#E5092E',
       body.description || '',
       leaderRole?.id || null,
+      deputyRole?.id || null,
       memberRole?.id || null,
       category?.id || null
     );
@@ -216,6 +265,14 @@ departmentsRouter.post('/', requireAuth, requireGuildAdmin, validateBody(CreateD
       `).run(deptId, guild.id, body.leaderUserId, user.id);
     }
 
+    // Si adjoint désigné, enregistrer dans department_members
+    if (body.deputyUserId) {
+      await db.prepare(`
+        INSERT INTO department_members (department_id, guild_id, user_id, role, status, requested_at, reviewed_by, reviewed_at)
+        VALUES (?, ?, ?, 'deputy', 'approved', datetime('now'), ?, datetime('now'))
+      `).run(deptId, guild.id, body.deputyUserId, user.id);
+    }
+
     // 5. Persistance dans config/guilds/{guildId}.json
     try {
       addDepartmentToConfig(guild.id, {
@@ -226,6 +283,7 @@ departmentsRouter.post('/', requireAuth, requireGuildAdmin, validateBody(CreateD
         color: body.color,
         description: body.description,
         leaderRoleId: leaderRole?.id || null,
+        deputyRoleId: deputyRole?.id || null,
         memberRoleId: memberRole?.id || null,
         categoryId: category?.id || null,
         categoryName: category?.name,
@@ -242,6 +300,7 @@ departmentsRouter.post('/', requireAuth, requireGuildAdmin, validateBody(CreateD
         id: deptId,
         name: body.name,
         leaderRoleId: leaderRole?.id,
+        deputyRoleId: deputyRole?.id,
         memberRoleId: memberRole?.id,
         categoryId: category?.id
       }
@@ -335,6 +394,27 @@ departmentsRouter.get('/:deptId/members', requireAuth, async (req: Request, res:
                 INSERT INTO department_members (department_id, guild_id, user_id, role, status, requested_at, reviewed_at)
                 VALUES (?, ?, ?, 'leader', 'approved', datetime('now'), datetime('now'))
                 ON CONFLICT(department_id, user_id) DO UPDATE SET role = 'leader', status = 'approved'
+              `).run(dept.id, req.params.guildId, mId);
+
+              await db.prepare(`
+                INSERT INTO users (id, username, discriminator, avatar)
+                VALUES (?, ?, ?, ?)
+                ON CONFLICT(id) DO UPDATE SET username = excluded.username, avatar = excluded.avatar
+              `).run(mId, m.user.username, m.user.discriminator || '0', m.user.avatar || null);
+            }
+          }
+        }
+
+        if (dept.deputy_role_id) {
+          const deputyRole = guild.roles.cache.get(dept.deputy_role_id);
+          if (deputyRole) {
+            for (const [mId, m] of deputyRole.members) {
+              await db.prepare(`
+                INSERT INTO department_members (department_id, guild_id, user_id, role, status, requested_at, reviewed_at)
+                VALUES (?, ?, ?, 'deputy', 'approved', datetime('now'), datetime('now'))
+                ON CONFLICT(department_id, user_id) DO UPDATE SET 
+                  role = CASE WHEN department_members.role = 'leader' THEN 'leader' ELSE 'deputy' END,
+                  status = 'approved'
               `).run(dept.id, req.params.guildId, mId);
 
               await db.prepare(`

@@ -132,6 +132,7 @@ export async function execute(interaction: ChatInputCommandInteraction) {
       .addFields(
         { name: '👥 Effectif actif', value: `**${dept.members_count}** membre(s)`, inline: true },
         { name: '🎖️ Rôle Chef', value: dept.leader_role_id ? `<@&${dept.leader_role_id}>` : '*Aucun*', inline: true },
+        { name: '🥈 Rôle Adjoint', value: dept.deputy_role_id ? `<@&${dept.deputy_role_id}>` : '*Aucun*', inline: true },
         { name: '🏷️ Rôle Membre', value: dept.member_role_id ? `<@&${dept.member_role_id}>` : '*Aucun*', inline: true },
         {
           name: '🚀 Projets & Activités',
@@ -181,7 +182,7 @@ export async function execute(interaction: ChatInputCommandInteraction) {
     const isAdmin = member.permissions.has(PermissionFlagsBits.Administrator) || member.permissions.has(PermissionFlagsBits.ManageGuild);
 
     const pending = (await db.prepare(`
-      SELECT dm.*, d.name as dept_name, d.icon as dept_icon, d.leader_role_id
+      SELECT dm.*, d.name as dept_name, d.icon as dept_icon, d.leader_role_id, d.deputy_role_id
       FROM department_members dm
       JOIN departments d ON d.id = dm.department_id
       WHERE dm.guild_id = ? AND dm.status = 'pending'
@@ -190,7 +191,9 @@ export async function execute(interaction: ChatInputCommandInteraction) {
 
     const filtered = pending.filter(p => {
       if (isAdmin) return true;
-      return p.leader_role_id && member.roles.cache.has(p.leader_role_id);
+      const isLeader = p.leader_role_id && member.roles.cache.has(p.leader_role_id);
+      const isDeputy = p.deputy_role_id && member.roles.cache.has(p.deputy_role_id);
+      return isLeader || isDeputy;
     });
 
     if (filtered.length === 0) {
@@ -231,11 +234,12 @@ export async function execute(interaction: ChatInputCommandInteraction) {
 
     const operator = await interaction.guild.members.fetch(interaction.user.id);
     const isLeader = dept.leader_role_id && operator.roles.cache.has(dept.leader_role_id);
+    const isDeputy = dept.deputy_role_id && operator.roles.cache.has(dept.deputy_role_id);
     const isAdmin = operator.permissions.has(PermissionFlagsBits.Administrator) || operator.permissions.has(PermissionFlagsBits.ManageGuild);
 
-    if (!isLeader && !isAdmin) {
+    if (!isLeader && !isDeputy && !isAdmin) {
       await interaction.reply({
-        content: `⛔ Vous devez être Chef du pôle **${dept.name}** ou Administrateur pour gérer les adhésions.`,
+        content: `⛔ Vous devez être Chef, Adjoint du pôle **${dept.name}** ou Administrateur pour gérer les adhésions.`,
         ephemeral: true
       });
       return;
