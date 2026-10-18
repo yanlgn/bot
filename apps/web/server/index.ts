@@ -73,7 +73,8 @@ app.use(errorHandler);
 
 // Démarrage du serveur et du client Discord
 async function startServer() {
-  await initDiscordClient(process.env.DISCORD_BOT_TOKEN || '');
+  const token = process.env.DISCORD_BOT_TOKEN || process.env.DISCORD_TOKEN || '';
+  await initDiscordClient(token);
 
   app.listen(PORT, () => {
     logger.info(`🌐 Serveur API et Dashboard SciClub à l'écoute sur http://localhost:${PORT}`);

@@ -10,10 +10,16 @@ const __dirname = path.dirname(__filename);
 dotenv.config({ path: path.resolve(__dirname, '../../../../.env') });
 dotenv.config();
 
+// Accepte DISCORD_BOT_TOKEN ou DISCORD_TOKEN indifféremment
+const token = process.env.DISCORD_BOT_TOKEN || process.env.DISCORD_TOKEN;
+if (token) {
+  process.env.DISCORD_BOT_TOKEN = token;
+}
+
 const EnvSchema = z.object({
   NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
   LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace']).default('info'),
-  DISCORD_BOT_TOKEN: z.string().min(1, 'DISCORD_BOT_TOKEN est requis'),
+  DISCORD_BOT_TOKEN: z.string().min(1, 'DISCORD_BOT_TOKEN (ou DISCORD_TOKEN) est requis'),
   DISCORD_CLIENT_ID: z.string().min(1, 'DISCORD_CLIENT_ID est requis'),
   DATABASE_PATH: z.string().default('./data/sciclub.sqlite'),
   CONFIG_PATH: z.string().default('./config/guilds'),
