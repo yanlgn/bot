@@ -4,7 +4,7 @@ import { discordClient } from '../botClient.js';
 import fs from 'fs';
 import path from 'path';
 
-export function requireGuildAdmin(req: Request, res: Response, next: NextFunction) {
+export async function requireGuildAdmin(req: Request, res: Response, next: NextFunction) {
   const guildId = req.params.guildId;
   const user = req.session?.user;
 
@@ -16,26 +16,27 @@ export function requireGuildAdmin(req: Request, res: Response, next: NextFunctio
     return res.status(401).json({ success: false, error: 'Non authentifié.' });
   }
 
-  const guild = discordClient.guilds.cache.get(guildId);
-  if (!guild) {
-    return res.status(404).json({
-      success: false,
-      error: 'Le bot n\'est pas présent sur ce serveur Discord.'
-    });
-  }
-
-  // Vérifie si le membre existe sur le serveur
-  guild.members.fetch(user.id).then(member => {
-    if (!member) {
-      return res.status(403).json({
+  try {
+    const guild = discordClient.guilds.cache.get(guildId) || await discordClient.guilds.fetch(guildId).catch(() => null);
+    if (!guild) {
+      return res.status(404).json({
         success: false,
-        error: 'Vous n\'êtes pas membre de ce serveur Discord.'
+        error: 'Le bot n\'est pas présent sur ce serveur Discord.'
       });
     }
 
     // Le propriétaire a tous les droits
     if (guild.ownerId === user.id) {
       return next();
+    }
+
+    // Vérifie si le membre existe sur le serveur
+    const member = await guild.members.fetch(user.id).catch(() => null);
+    if (!member) {
+      return res.status(403).json({
+        success: false,
+        error: 'Vous n\'êtes pas membre de ce serveur Discord.'
+      });
     }
 
     // Droits Discord natifs
@@ -64,10 +65,10 @@ export function requireGuildAdmin(req: Request, res: Response, next: NextFunctio
       success: false,
       error: 'Accès refusé. Vous devez posséder la permission "Gérer le serveur" ou un rôle administrateur du club.'
     });
-  }).catch(err => {
+  } catch (err: any) {
     return res.status(403).json({
       success: false,
       error: `Impossible de vérifier vos permissions : ${err.message}`
     });
-  });
+  }
 }

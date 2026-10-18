@@ -6,7 +6,7 @@ import { discordClient } from '../botClient.js';
 export const guildsRouter = Router();
 
 guildsRouter.get('/:guildId', requireAuth, requireGuildAdmin, async (req: Request, res: Response) => {
-  const guild = discordClient.guilds.cache.get(req.params.guildId);
+  const guild = discordClient.guilds.cache.get(req.params.guildId) || await discordClient.guilds.fetch(req.params.guildId).catch(() => null);
   if (!guild) {
     return res.status(404).json({ success: false, error: 'Serveur introuvable.' });
   }
