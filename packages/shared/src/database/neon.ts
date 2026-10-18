@@ -18,7 +18,9 @@ export function toPgSql(sql: string): string {
     .replace(/\bis_archived\s*=\s*0\b/gi, 'is_archived = false')
     .replace(/\bis_archived\s*=\s*1\b/gi, 'is_archived = true')
     .replace(/\battended\s*=\s*0\b/gi, 'attended = false')
-    .replace(/\battended\s*=\s*1\b/gi, 'attended = true');
+    .replace(/\battended\s*=\s*1\b/gi, 'attended = true')
+    .replace(/,\s*0\s*,\s*NOW\(\)/gi, ', false, NOW()')
+    .replace(/,\s*1\s*,\s*NOW\(\)/gi, ', true, NOW()');
 
   if (/INSERT\s+OR\s+IGNORE\s+INTO/i.test(converted)) {
     converted = converted.replace(/INSERT\s+OR\s+IGNORE\s+INTO/i, 'INSERT INTO');

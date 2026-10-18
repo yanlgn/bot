@@ -194,7 +194,7 @@ departmentsRouter.post('/', requireAuth, requireGuildAdmin, validateBody(CreateD
       INSERT INTO departments (
         id, guild_id, name, short_name, icon, color, description, 
         leader_role_id, member_role_id, category_id, is_archived, created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, datetime('now'), datetime('now'))
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, false, datetime('now'), datetime('now'))
     `).run(
       deptId,
       guild.id,
@@ -296,7 +296,7 @@ departmentsRouter.delete('/:deptId', requireAuth, requireGuildAdmin, async (req:
     }
 
     // 2. Marquer comme archivé en base de données
-    await db.prepare('UPDATE departments SET is_archived = 1, updated_at = datetime(\'now\') WHERE id = ?').run(dept.id);
+    await db.prepare('UPDATE departments SET is_archived = true, updated_at = datetime(\'now\') WHERE id = ?').run(dept.id);
 
     // 3. Mettre à jour le fichier JSON déclaratif
     try {
