@@ -30,9 +30,11 @@ try {
     schemaPath = path.resolve(process.cwd(), 'apps/bot/src/database/schema.sql');
   }
 
-  if (fs.existsSync(schemaPath)) {
+    if (fs.existsSync(schemaPath)) {
     const schemaSql = fs.readFileSync(schemaPath, 'utf8');
     db.exec(schemaSql);
+    try { db.exec('ALTER TABLE projects ADD COLUMN department_id TEXT;'); } catch {}
+    try { db.exec('ALTER TABLE resources ADD COLUMN department_id TEXT;'); } catch {}
     logger.info('📦 Schéma SQLite SciClub initialisé avec succès.');
   } else {
     logger.warn(`⚠️ Fichier schema.sql introuvable à ${schemaPath}.`);

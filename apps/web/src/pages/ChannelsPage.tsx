@@ -121,16 +121,30 @@ export const ChannelsPage: React.FC = () => {
           </p>
         </div>
 
-        <button
-          onClick={() => {
-            resetForm();
-            setIsCreateModalOpen(true);
-          }}
-          className="flex items-center px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg transition shadow-md shadow-blue-500/20"
-        >
-          <Plus className="w-4 h-4 mr-2" />
-          Nouveau Salon
-        </button>
+        <div className="flex items-center space-x-3">
+          <button
+            onClick={() => {
+              resetForm();
+              setType('category');
+              setIsCreateModalOpen(true);
+            }}
+            className="flex items-center px-4 py-2 bg-gray-800 hover:bg-gray-700 text-gray-200 text-sm font-medium rounded-lg transition border border-gray-700"
+          >
+            <Folder className="w-4 h-4 mr-2 text-amber-400" />
+            Nouvelle Catégorie
+          </button>
+          <button
+            onClick={() => {
+              resetForm();
+              setType('text');
+              setIsCreateModalOpen(true);
+            }}
+            className="flex items-center px-4 py-2 bg-[#E5092E] hover:bg-[#c00725] text-white text-sm font-medium rounded-lg transition shadow-md shadow-[#E5092E]/20"
+          >
+            <Plus className="w-4 h-4 mr-2" />
+            Nouveau Salon
+          </button>
+        </div>
       </div>
 
       {/* Channels List by Category */}

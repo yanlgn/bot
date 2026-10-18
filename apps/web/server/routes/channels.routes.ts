@@ -11,6 +11,7 @@ import {
 import { ChannelType, PermissionFlagsBits, TextChannel, VoiceChannel, CategoryChannel } from 'discord.js';
 import { db } from '../db.js';
 import { randomUUID } from 'crypto';
+import { addCategoryToConfig, addChannelToConfig } from '../utils/configHelper.js';
 
 export const channelsRouter = Router({ mergeParams: true });
 
@@ -99,6 +100,21 @@ channelsRouter.post('/', requireAuth, requireGuildAdmin, validateBody(CreateChan
     });
 
     recordAudit(guild.id, user.id, user.username, 'CHANNEL_CREATED', created.id, `Salon #${created.name} (${req.body.type}) créé`);
+
+    // Synchronisation automatique dans config/guilds/{guildId}.json
+    try {
+      if (created.type === ChannelType.GuildCategory) {
+        addCategoryToConfig(guild.id, sanitizeChannelName(created.name), created.name);
+      } else {
+        const parentCh = created.parent ? created.parent.name : null;
+        addChannelToConfig(guild.id, sanitizeChannelName(created.name), {
+          name: created.name,
+          type: req.body.type === 'voice' ? 'voice' : 'text',
+          categoryKey: parentCh ? sanitizeChannelName(parentCh) : null,
+          topic: req.body.topic
+        });
+      }
+    } catch {}
 
     res.status(201).json({
       success: true,

@@ -12,6 +12,7 @@ import {
 import { PermissionFlagsBits, PermissionsBitField } from 'discord.js';
 import { db } from '../db.js';
 import { randomUUID } from 'crypto';
+import { addRoleToConfig } from '../utils/configHelper.js';
 
 export const rolesRouter = Router({ mergeParams: true });
 
@@ -96,6 +97,16 @@ rolesRouter.post('/', requireAuth, requireGuildAdmin, validateBody(CreateRoleSch
     });
 
     recordAudit(guild.id, user.id, user.username, 'ROLE_CREATED', created.id, `Rôle "${created.name}" créé`);
+
+    // Synchronisation automatique dans config/guilds/{guildId}.json
+    try {
+      const roleKey = created.name.toLowerCase().replace(/[^a-z0-9]/g, '_');
+      addRoleToConfig(guild.id, roleKey, {
+        name: created.name,
+        color: decimalToHexColor(created.color),
+        permissions: created.permissions.toArray()
+      });
+    } catch {}
 
     res.status(201).json({
       success: true,

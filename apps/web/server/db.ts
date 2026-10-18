@@ -13,3 +13,18 @@ if (!fs.existsSync(dir)) {
 export const db = new DatabaseSync(resolvedPath);
 db.exec('PRAGMA journal_mode = WAL;');
 db.exec('PRAGMA foreign_keys = ON;');
+
+try {
+  let schemaPath = path.resolve(process.cwd(), 'apps/bot/src/database/schema.sql');
+  if (fs.existsSync(schemaPath)) {
+    const schemaSql = fs.readFileSync(schemaPath, 'utf8');
+    db.exec(schemaSql);
+  }
+} catch (e) {
+  // Ignorer si déjà initialisé
+}
+
+// Migrations idempotentes de colonnes
+try { db.exec('ALTER TABLE projects ADD COLUMN department_id TEXT;'); } catch {}
+try { db.exec('ALTER TABLE resources ADD COLUMN department_id TEXT;'); } catch {}
+

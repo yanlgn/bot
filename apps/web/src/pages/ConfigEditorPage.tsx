@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiFetch } from '../api/client';
-import { FileCode, Save, CheckCircle, RotateCcw, AlertCircle, History } from 'lucide-react';
+import { FileCode, Save, CheckCircle, RotateCcw, AlertCircle, History, RefreshCw } from 'lucide-react';
 
 export const ConfigEditorPage: React.FC = () => {
   const { guildId } = useParams<{ guildId: string }>();
@@ -79,6 +79,21 @@ export const ConfigEditorPage: React.FC = () => {
     }
   });
 
+  // Apply to Discord Mutation
+  const applyMutation = useMutation({
+    mutationFn: () =>
+      apiFetch(`/guilds/${guildId}/config/apply`, { method: 'POST' }),
+    onSuccess: (data: any) => {
+      setValidationError(null);
+      setSuccessMessage(`🚀 ${data.message} (${data.logs?.length || 0} élément(s) traités)`);
+      setTimeout(() => setSuccessMessage(null), 6000);
+    },
+    onError: (err: any) => {
+      setSuccessMessage(null);
+      setValidationError(`Erreur d'application sur Discord : ${err.message}`);
+    }
+  });
+
   const handleValidate = () => {
     try {
       const parsed = JSON.parse(jsonText);
@@ -128,10 +143,18 @@ export const ConfigEditorPage: React.FC = () => {
           <button
             onClick={handleSave}
             disabled={saveMutation.isPending}
-            className="flex items-center px-5 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-700 text-white text-sm font-semibold rounded-lg transition shadow-md shadow-blue-500/20"
+            className="flex items-center px-4 py-2 bg-gray-800 hover:bg-gray-700 disabled:bg-gray-800 text-white text-sm font-semibold rounded-lg transition border border-gray-700"
           >
             <Save className="w-4 h-4 mr-2" />
-            {saveMutation.isPending ? 'Sauvegarde...' : 'Sauvegarder'}
+            {saveMutation.isPending ? 'Sauvegarde...' : 'Sauvegarder JSON'}
+          </button>
+          <button
+            onClick={() => applyMutation.mutate()}
+            disabled={applyMutation.isPending}
+            className="flex items-center px-5 py-2 bg-[#E5092E] hover:bg-[#c00725] disabled:opacity-50 text-white text-sm font-semibold rounded-lg transition shadow-md shadow-[#E5092E]/20"
+          >
+            <RefreshCw className={`w-4 h-4 mr-2 ${applyMutation.isPending ? 'animate-spin' : ''}`} />
+            {applyMutation.isPending ? 'Application...' : 'Appliquer sur Discord'}
           </button>
         </div>
       </div>

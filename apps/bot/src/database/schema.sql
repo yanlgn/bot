@@ -50,9 +50,39 @@ CREATE TABLE IF NOT EXISTS channels_cache (
   position INTEGER DEFAULT 0
 );
 
+CREATE TABLE IF NOT EXISTS departments (
+  id TEXT PRIMARY KEY,
+  guild_id TEXT NOT NULL,
+  name TEXT NOT NULL,
+  short_name TEXT,
+  icon TEXT DEFAULT '🔬',
+  color TEXT DEFAULT '#E5092E',
+  description TEXT DEFAULT '',
+  leader_role_id TEXT,
+  member_role_id TEXT,
+  category_id TEXT,
+  is_archived BOOLEAN DEFAULT 0,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS department_members (
+  department_id TEXT NOT NULL,
+  guild_id TEXT NOT NULL,
+  user_id TEXT NOT NULL,
+  role TEXT CHECK(role IN ('leader', 'member')) DEFAULT 'member',
+  status TEXT CHECK(status IN ('pending', 'approved', 'rejected')) DEFAULT 'approved',
+  requested_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  reviewed_by TEXT,
+  reviewed_at DATETIME,
+  PRIMARY KEY (department_id, user_id),
+  FOREIGN KEY (department_id) REFERENCES departments(id) ON DELETE CASCADE
+);
+
 CREATE TABLE IF NOT EXISTS projects (
   id TEXT PRIMARY KEY,
   guild_id TEXT NOT NULL,
+  department_id TEXT,
   name TEXT NOT NULL,
   description TEXT NOT NULL,
   leader_id TEXT NOT NULL,
@@ -101,6 +131,7 @@ CREATE TABLE IF NOT EXISTS event_participants (
 CREATE TABLE IF NOT EXISTS resources (
   id TEXT PRIMARY KEY,
   guild_id TEXT NOT NULL,
+  department_id TEXT,
   title TEXT NOT NULL,
   description TEXT NOT NULL,
   url TEXT NOT NULL,
@@ -177,3 +208,5 @@ CREATE INDEX IF NOT EXISTS idx_projects_guild ON projects(guild_id, status);
 CREATE INDEX IF NOT EXISTS idx_events_guild ON events(guild_id, scheduled_start_time);
 CREATE INDEX IF NOT EXISTS idx_resources_guild ON resources(guild_id, category);
 CREATE INDEX IF NOT EXISTS idx_points_guild ON points(guild_id, balance DESC);
+CREATE INDEX IF NOT EXISTS idx_departments_guild ON departments(guild_id);
+CREATE INDEX IF NOT EXISTS idx_dept_members_user ON department_members(guild_id, user_id);

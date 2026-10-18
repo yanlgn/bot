@@ -114,7 +114,7 @@ export const RolesPage: React.FC = () => {
             resetForm();
             setIsCreateModalOpen(true);
           }}
-          className="flex items-center px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg transition shadow-md shadow-blue-500/20"
+          className="flex items-center px-4 py-2 bg-[#E5092E] hover:bg-[#c00725] text-white text-sm font-medium rounded-lg transition shadow-md shadow-[#E5092E]/20"
         >
           <Plus className="w-4 h-4 mr-2" />
           Nouveau Rôle

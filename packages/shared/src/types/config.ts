@@ -52,11 +52,33 @@ export interface PointsConfig {
   resourceSharingPoints: number;
 }
 
+export interface DepartmentChannelConfig {
+  name: string;
+  type?: 'text' | 'voice' | 'forum';
+  topic?: string;
+  readonly?: boolean;
+}
+
+export interface DepartmentConfigItem {
+  id: string;
+  name: string;
+  shortName?: string;
+  icon?: string;
+  color?: string;
+  description?: string;
+  leaderRoleId?: string | null;
+  memberRoleId?: string | null;
+  categoryId?: string | null;
+  categoryName?: string;
+  channels?: DepartmentChannelConfig[];
+}
+
 export interface GuildConfigFile {
   guildId: string;
   locale: string;
   timezone: string;
   club: ClubInfoConfig;
+  departments?: DepartmentConfigItem[];
   roles: Record<string, RoleConfigItem>;
   categories: CategoryConfigItem[];
   channels: Record<string, ChannelConfigItem>;

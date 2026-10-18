@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { DepartmentConfigItemSchema } from './department.schema.js';
 
 export const PermissionStateSchema = z.enum(['ALLOW', 'DENY', 'NEUTRAL']);
 
@@ -59,6 +60,7 @@ export const GuildConfigFileSchema = z.object({
   locale: z.string().default('fr'),
   timezone: z.string().default('Europe/Paris'),
   club: ClubInfoSchema,
+  departments: z.array(DepartmentConfigItemSchema).default([]),
   roles: z.record(z.string(), RoleConfigItemSchema),
   categories: z.array(CategoryConfigItemSchema).default([]),
   channels: z.record(z.string(), ChannelConfigItemSchema),
