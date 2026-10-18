@@ -2,7 +2,6 @@ import express from 'express';
 import session from 'express-session';
 import helmet from 'helmet';
 import cors from 'cors';
-import cookieParser from 'cookie-parser';
 import pinoHttpModule from 'pino-http';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -23,7 +22,7 @@ const isProduction = process.env.NODE_ENV === 'production';
 const PORT = process.env.PORT || 3001;
 
 // Nécessaire derrière le reverse proxy HTTPS de Render
-app.set('trust proxy', 1);
+app.enable('trust proxy');
 
 // Sécurité Web
 app.use(helmet({
@@ -37,18 +36,18 @@ app.use(cors({
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
-app.use(cookieParser());
 
-// Sessions sécurisées
+// Sessions sécurisées garanties derrière proxy
 app.use(session({
   name: 'cortex_session',
-  secret: process.env.SESSION_SECRET || 'sciclub_secret_key_long_and_complex_12345',
-  resave: false,
+  secret: process.env.SESSION_SECRET || 'cortex_secret_key_session_secure_2026_xyz',
+  resave: true,
   saveUninitialized: false,
   cookie: {
     httpOnly: true,
-    secure: isProduction,
+    secure: false,
     sameSite: 'lax',
+    path: '/',
     maxAge: 7 * 24 * 60 * 60 * 1000 // 7 jours
   }
 }));

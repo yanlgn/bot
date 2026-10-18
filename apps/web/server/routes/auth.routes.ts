@@ -125,11 +125,11 @@ authRouter.get('/callback', async (req: Request, res: Response) => {
     req.session.save((err) => {
       if (err) {
         logger.error({ err }, 'Erreur lors de la persistance de session utilisateur');
-        return res.redirect(`${frontendUrl}/login?error=session_save_failed`);
+        return res.redirect('/login?error=session_save_failed');
       }
 
       logger.info({ user: userData.username }, 'Utilisateur authentifié avec succès via Discord OAuth2');
-      res.redirect(`${frontendUrl}/guilds`);
+      res.redirect('/guilds');
     });
   } catch (error) {
     logger.error({ error }, 'Erreur lors du callback OAuth2');

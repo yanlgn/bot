@@ -9,8 +9,8 @@ meRouter.get('/', requireAuth, async (req: Request, res: Response) => {
   const user = req.session.user!;
 
   try {
-    // Récupérer les guildes de l'utilisateur depuis l'API Discord
-    const guildsRes = await fetch('https://discord.com/api/users/@me/guilds', {
+    // Récupérer les guildes de l'utilisateur depuis l'API Discord v10
+    const guildsRes = await fetch('https://discord.com/api/v10/users/@me/guilds', {
       headers: { Authorization: `Bearer ${user.accessToken}` }
     });
 
