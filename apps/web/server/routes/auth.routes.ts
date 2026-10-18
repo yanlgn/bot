@@ -14,26 +14,59 @@ const authLimiter = rateLimit({
 
 authRouter.use(authLimiter);
 
+/**
+ * Résout dynamiquement l'origine HTTP(S) + Host de la requête courante
+ * Compatible avec tous les reverse-proxies (Render, Cloudflare, Nginx, Caddy...)
+ */
+function getHostOrigin(req: Request): string {
+  // Protocole
+  let proto = req.headers['x-forwarded-proto'] || req.protocol || 'http';
+  if (Array.isArray(proto)) proto = proto[0];
+  if (typeof proto === 'string' && proto.includes(',')) proto = proto.split(',')[0].trim();
+
+  // Hôte (nom de domaine ou IP + port)
+  let host = req.headers['x-forwarded-host'] || req.get('host') || 'localhost:3001';
+  if (Array.isArray(host)) host = host[0];
+  if (typeof host === 'string' && host.includes(',')) host = host.split(',')[0].trim();
+
+  return `${proto}://${host}`;
+}
+
 function getLoginRedirectUri(req: Request): string {
-  if (process.env.DISCORD_REDIRECT_URI) return process.env.DISCORD_REDIRECT_URI;
-  const proto = req.headers['x-forwarded-proto'] || req.protocol;
-  const host = req.get('host');
-  return host ? `${proto}://${host}/admin/auth/discord/callback` : 'http://localhost:3001/admin/auth/discord/callback';
+  const origin = getHostOrigin(req);
+
+  // 1. Si le client demande un chemin explicite via ?redirect_path=...
+  if (typeof req.query.redirect_path === 'string') {
+    const customPath = req.query.redirect_path.startsWith('/') ? req.query.redirect_path : `/${req.query.redirect_path}`;
+    return `${origin}${customPath}`;
+  }
+
+  // 2. Si DISCORD_REDIRECT_PATH est défini dans les variables d'environnement
+  if (process.env.DISCORD_REDIRECT_PATH) {
+    const customPath = process.env.DISCORD_REDIRECT_PATH.startsWith('/') ? process.env.DISCORD_REDIRECT_PATH : `/${process.env.DISCORD_REDIRECT_PATH}`;
+    return `${origin}${customPath}`;
+  }
+
+  // 3. Si DISCORD_REDIRECT_URI est renseigné avec un ancien ou nouveau domaine, on extrait son pathname
+  if (process.env.DISCORD_REDIRECT_URI) {
+    try {
+      const parsed = new URL(process.env.DISCORD_REDIRECT_URI);
+      return `${origin}${parsed.pathname}`;
+    } catch {}
+  }
+
+  // 4. Par défaut : route de callback standard
+  return `${origin}/admin/auth/discord/callback`;
 }
 
 function getCallbackRedirectUri(req: Request): string {
-  if (process.env.DISCORD_REDIRECT_URI) return process.env.DISCORD_REDIRECT_URI;
-  const proto = req.headers['x-forwarded-proto'] || req.protocol;
-  const host = req.get('host');
+  const origin = getHostOrigin(req);
   const pathWithoutQuery = req.originalUrl.split('?')[0];
-  return `${proto}://${host}${pathWithoutQuery}`;
+  return `${origin}${pathWithoutQuery}`;
 }
 
 function getFrontendUrl(req: Request): string {
-  if (process.env.FRONTEND_URL) return process.env.FRONTEND_URL;
-  const proto = req.headers['x-forwarded-proto'] || req.protocol;
-  const host = req.get('host');
-  return host ? `${proto}://${host}` : 'http://localhost:5173';
+  return getHostOrigin(req);
 }
 
 /**
@@ -41,10 +74,13 @@ function getFrontendUrl(req: Request): string {
  */
 export const handleOAuthLogin = (req: Request, res: Response) => {
   const clientId = process.env.DISCORD_CLIENT_ID || '1350228159005724772';
-  const redirectUri = encodeURIComponent(getLoginRedirectUri(req));
+  const redirectUriRaw = getLoginRedirectUri(req);
+  const redirectUri = encodeURIComponent(redirectUriRaw);
   const state = randomBytes(16).toString('hex');
 
   req.session.oauthState = state;
+
+  logger.info({ redirectUri: redirectUriRaw, host: req.get('host') }, '🔗 Démarrage du flux OAuth2 avec redirect_uri dynamique');
 
   const scope = encodeURIComponent('identify guilds');
   const authUrl = `https://discord.com/api/oauth2/authorize?client_id=${clientId}&redirect_uri=${redirectUri}&response_type=code&scope=${scope}&state=${state}`;
