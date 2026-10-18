@@ -160,7 +160,7 @@ export const handleOAuthCallback = async (req: Request, res: Response) => {
     const authToken = randomBytes(32).toString('hex');
 
     try {
-      db.prepare(`
+      await db.prepare(`
         INSERT INTO sessions (token, user_id, username, discriminator, avatar, access_token, expires_at)
         VALUES (?, ?, ?, ?, ?, ?, datetime('now', '+14 days'))
       `).run(
@@ -202,13 +202,13 @@ authRouter.get('/discord/callback', handleOAuthCallback);
  * POST /api/auth/logout
  * Déconnecte l'utilisateur et détruit la session
  */
-authRouter.post('/logout', (req: Request, res: Response) => {
+authRouter.post('/logout', async (req: Request, res: Response) => {
   const authHeader = req.headers.authorization;
   const token = authHeader && authHeader.startsWith('Bearer ') ? authHeader.slice(7).trim() : null;
 
   if (token) {
     try {
-      db.prepare('DELETE FROM sessions WHERE token = ?').run(token);
+      await db.prepare('DELETE FROM sessions WHERE token = ?').run(token);
     } catch {}
   }
 

@@ -10,8 +10,8 @@ import { randomUUID } from 'crypto';
 
 export const eventsRouter = Router({ mergeParams: true });
 
-eventsRouter.get('/', requireAuth, requireGuildAdmin, (req: Request, res: Response) => {
-  const events = db.prepare(`
+eventsRouter.get('/', requireAuth, requireGuildAdmin, async (req: Request, res: Response) => {
+  const events = await db.prepare(`
     SELECT 
       e.id,
       e.guild_id as guildId,
@@ -61,7 +61,7 @@ eventsRouter.post('/', requireAuth, requireGuildAdmin, validateBody(CreateEventS
     } catch {}
   }
 
-  db.prepare(`
+  await db.prepare(`
     INSERT INTO events (
       id, guild_id, title, description, type, scheduled_start_time,
       location, speaker, max_participants, target_audience,
@@ -86,8 +86,8 @@ eventsRouter.post('/', requireAuth, requireGuildAdmin, validateBody(CreateEventS
   res.status(201).json({ success: true, data: { id: eventId, title: req.body.title } });
 });
 
-eventsRouter.patch('/:eventId', requireAuth, requireGuildAdmin, validateBody(UpdateEventSchema), (req: Request, res: Response) => {
-  const event = db.prepare('SELECT * FROM events WHERE id = ? AND guild_id = ?').get(req.params.eventId, req.params.guildId);
+eventsRouter.patch('/:eventId', requireAuth, requireGuildAdmin, validateBody(UpdateEventSchema), async (req: Request, res: Response) => {
+  const event = await db.prepare('SELECT * FROM events WHERE id = ? AND guild_id = ?').get(req.params.eventId, req.params.guildId);
   if (!event) return res.status(404).json({ success: false, error: 'Événement introuvable.' });
 
   const updates: string[] = [];
@@ -104,7 +104,7 @@ eventsRouter.patch('/:eventId', requireAuth, requireGuildAdmin, validateBody(Upd
   if (updates.length > 0) {
     updates.push("updated_at = datetime('now')");
     params.push(req.params.eventId);
-    db.prepare(`UPDATE events SET ${updates.join(', ')} WHERE id = ?`).run(...params);
+    await db.prepare(`UPDATE events SET ${updates.join(', ')} WHERE id = ?`).run(...params);
   }
 
   res.json({ success: true, message: 'Événement mis à jour avec succès.' });

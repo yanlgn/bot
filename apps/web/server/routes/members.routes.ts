@@ -7,9 +7,9 @@ import { randomUUID } from 'crypto';
 
 export const membersRouter = Router({ mergeParams: true });
 
-function recordAudit(guildId: string, userId: string, username: string, action: string, targetId: string, details: string) {
+async function recordAudit(guildId: string, userId: string, username: string, action: string, targetId: string, details: string) {
   try {
-    db.prepare(`
+    await db.prepare(`
       INSERT INTO audit_logs (id, guild_id, user_id, username, action, target_type, target_id, details, created_at)
       VALUES (?, ?, ?, ?, ?, 'member', ?, ?, datetime('now'))
     `).run(randomUUID(), guildId, userId, username, action, targetId, details);
@@ -26,10 +26,10 @@ membersRouter.get('/', requireAuth, requireGuildAdmin, async (req: Request, res:
   try {
     const fetched = await guild.members.fetch({ limit: 100 });
 
-    const pointsRows = db.prepare('SELECT user_id, balance FROM points WHERE guild_id = ?').all(guild.id) as any[];
+    const pointsRows = (await db.prepare('SELECT user_id, balance FROM points WHERE guild_id = ?').all(guild.id)) as any[];
     const pointsMap = new Map(pointsRows.map(r => [r.user_id, r.balance]));
 
-    const warnRows = db.prepare('SELECT user_id, COUNT(*) as count FROM warnings WHERE guild_id = ? GROUP BY user_id').all(guild.id) as any[];
+    const warnRows = (await db.prepare('SELECT user_id, COUNT(*) as count FROM warnings WHERE guild_id = ? GROUP BY user_id').all(guild.id)) as any[];
     const warnMap = new Map(warnRows.map(r => [r.user_id, r.count]));
 
     const list = Array.from(fetched.values()).map(m => ({

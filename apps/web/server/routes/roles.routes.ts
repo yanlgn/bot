@@ -17,9 +17,9 @@ import { addRoleToConfig } from '../utils/configHelper.js';
 export const rolesRouter = Router({ mergeParams: true });
 
 // Audit log helper
-function recordAudit(guildId: string, userId: string, username: string, action: string, targetId: string, details: string) {
+async function recordAudit(guildId: string, userId: string, username: string, action: string, targetId: string, details: string) {
   try {
-    db.prepare(`
+    await db.prepare(`
       INSERT INTO audit_logs (id, guild_id, user_id, username, action, target_type, target_id, details, created_at)
       VALUES (?, ?, ?, ?, ?, 'role', ?, ?, datetime('now'))
     `).run(randomUUID(), guildId, userId, username, action, targetId, details);

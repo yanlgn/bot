@@ -106,14 +106,14 @@ export class ProjectService {
       INSERT INTO projects (id, guild_id, name, description, leader_id, channel_id, status, created_at, updated_at)
       VALUES (?, ?, ?, ?, ?, ?, 'idea', datetime('now'), datetime('now'))
     `);
-    insertProject.run(projectId, guild.id, input.name, input.description, input.leaderId, channelId);
+    await insertProject.run(projectId, guild.id, input.name, input.description, input.leaderId, channelId);
 
     // Enregistrement du chef comme membre leader
     const insertMember = db.prepare(`
       INSERT INTO project_members (project_id, user_id, role, joined_at)
       VALUES (?, ?, 'leader', datetime('now'))
     `);
-    insertMember.run(projectId, input.leaderId);
+    await insertMember.run(projectId, input.leaderId);
 
     // Enregistrement des autres membres
     const insertContrib = db.prepare(`
@@ -122,7 +122,7 @@ export class ProjectService {
     `);
     for (const mId of input.memberIds) {
       if (mId !== input.leaderId) {
-        insertContrib.run(projectId, mId);
+        await insertContrib.run(projectId, mId);
       }
     }
 
@@ -130,7 +130,7 @@ export class ProjectService {
     const config = ConfigService.getGuildConfig(guild.id);
     const pts = config?.points?.projectCreationPoints ?? 20;
     if (config?.points?.enabled) {
-      PointsService.addPoints(guild.id, input.leaderId, pts);
+      await PointsService.addPoints(guild.id, input.leaderId, pts);
     }
 
     AuditLogService.record({
@@ -166,7 +166,7 @@ export class ProjectService {
     input: UpdateProjectInput,
     operator: { id: string; username: string }
   ): Promise<void> {
-    const project = db.prepare('SELECT * FROM projects WHERE id = ? AND guild_id = ?').get(projectId, guild.id) as any;
+    const project = (await db.prepare('SELECT * FROM projects WHERE id = ? AND guild_id = ?').get(projectId, guild.id)) as any;
     if (!project) throw new Error('Projet introuvable.');
 
     const updates: string[] = [];
@@ -202,7 +202,7 @@ export class ProjectService {
     if (updates.length > 0) {
       updates.push("updated_at = datetime('now')");
       params.push(projectId, guild.id);
-      db.prepare(`UPDATE projects SET ${updates.join(', ')} WHERE id = ? AND guild_id = ?`).run(...params);
+      await db.prepare(`UPDATE projects SET ${updates.join(', ')} WHERE id = ? AND guild_id = ?`).run(...params);
     }
 
     AuditLogService.record({
@@ -219,8 +219,8 @@ export class ProjectService {
   /**
    * Retourne tous les projets d'un serveur
    */
-  static getProjects(guildId: string): ProjectRecord[] {
-    const projects = db.prepare(`
+  static async getProjects(guildId: string): Promise<ProjectRecord[]> {
+    const projects = (await db.prepare(`
       SELECT 
         id,
         guild_id as guildId,
@@ -234,16 +234,14 @@ export class ProjectService {
       FROM projects
       WHERE guild_id = ?
       ORDER BY created_at DESC
-    `).all(guildId) as unknown as ProjectRecord[];
+    `).all(guildId)) as unknown as ProjectRecord[];
 
-    const membersStmt = db.prepare('SELECT user_id FROM project_members WHERE project_id = ?');
-
-    return projects.map(p => {
-      const memberRows = membersStmt.all(p.id) as unknown as { user_id: string }[];
+    return await Promise.all(projects.map(async p => {
+      const memberRows = (await db.prepare('SELECT user_id FROM project_members WHERE project_id = ?').all(p.id)) as unknown as { user_id: string }[];
       return {
         ...p,
         memberIds: memberRows.map(m => m.user_id)
       };
-    });
+    }));
   }
 }

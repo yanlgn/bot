@@ -42,10 +42,10 @@ export async function execute(interaction: ChatInputCommandInteraction) {
 
     let departmentId: string | undefined = undefined;
     if (poleQuery) {
-      const dept = db.prepare(`
+      const dept = (await db.prepare(`
         SELECT id, name FROM departments 
         WHERE guild_id = ? AND (id = ? OR LOWER(name) LIKE ? OR LOWER(short_name) = ?)
-      `).get(interaction.guild.id, poleQuery, `%${poleQuery}%`, poleQuery) as any;
+      `).get(interaction.guild.id, poleQuery, `%${poleQuery}%`, poleQuery)) as any;
       if (dept) departmentId = dept.id;
     }
 
@@ -63,7 +63,7 @@ export async function execute(interaction: ChatInputCommandInteraction) {
       );
 
       if (departmentId) {
-        db.prepare('UPDATE projects SET department_id = ? WHERE id = ?').run(departmentId, project.id);
+        await db.prepare('UPDATE projects SET department_id = ? WHERE id = ?').run(departmentId, project.id);
       }
 
       const embed = new EmbedBuilder()
@@ -83,7 +83,7 @@ export async function execute(interaction: ChatInputCommandInteraction) {
       await interaction.editReply({ content: `❌ Impossible de créer le projet : ${error.message}` });
     }
   } else if (subcommand === 'liste') {
-    const projects = ProjectService.getProjects(interaction.guild.id);
+    const projects = await ProjectService.getProjects(interaction.guild.id);
 
     if (projects.length === 0) {
       await interaction.reply({
@@ -111,7 +111,7 @@ export async function execute(interaction: ChatInputCommandInteraction) {
     await interaction.reply({ embeds: [embed] });
   } else if (subcommand === 'rejoindre') {
     const projectId = interaction.options.getString('id', true);
-    const project = db.prepare('SELECT * FROM projects WHERE id = ? AND guild_id = ?').get(projectId, interaction.guild.id) as any;
+    const project = (await db.prepare('SELECT * FROM projects WHERE id = ? AND guild_id = ?').get(projectId, interaction.guild.id)) as any;
 
     if (!project) {
       await interaction.reply({ content: `❌ Projet introuvable avec l'ID "${projectId}". Tapez \`/projet liste\`.`, ephemeral: true });
@@ -119,14 +119,14 @@ export async function execute(interaction: ChatInputCommandInteraction) {
     }
 
     // Vérifier si déjà membre
-    const existing = db.prepare('SELECT * FROM project_members WHERE project_id = ? AND user_id = ?').get(projectId, interaction.user.id);
+    const existing = await db.prepare('SELECT * FROM project_members WHERE project_id = ? AND user_id = ?').get(projectId, interaction.user.id);
     if (existing) {
       await interaction.reply({ content: `✅ Vous participez déjà au projet **${project.name}** !`, ephemeral: true });
       return;
     }
 
     try {
-      db.prepare(`
+      await db.prepare(`
         INSERT INTO project_members (project_id, user_id, role, joined_at)
         VALUES (?, ?, 'contributor', datetime('now'))
       `).run(projectId, interaction.user.id);

@@ -32,13 +32,13 @@ export async function execute(interaction: ChatInputCommandInteraction) {
         return;
       }
 
-      const res = ConfigService.saveGuildConfig(interaction.guild.id, config, operator);
+      const res = await ConfigService.saveGuildConfig(interaction.guild.id, config, operator);
       await interaction.reply({
         content: `✅ Sauvegarde créée avec succès : \`${res.backupPath}\``,
         ephemeral: true
       });
     } else if (subcommand === 'liste') {
-      const backups = ConfigService.listBackups(interaction.guild.id);
+      const backups = await ConfigService.listBackups(interaction.guild.id);
 
       if (backups.length === 0) {
         await interaction.reply({ content: 'Aucune sauvegarde disponible pour ce serveur.', ephemeral: true });
@@ -56,7 +56,7 @@ export async function execute(interaction: ChatInputCommandInteraction) {
       await interaction.reply({ embeds: [embed], ephemeral: true });
     } else if (subcommand === 'restaurer') {
       const backupId = interaction.options.getString('id', true);
-      ConfigService.restoreBackup(interaction.guild.id, backupId, operator);
+      await ConfigService.restoreBackup(interaction.guild.id, backupId, operator);
 
       await interaction.reply({
         content: `✅ Configuration restaurée avec succès depuis la sauvegarde \`${backupId}\` !`,

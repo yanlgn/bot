@@ -16,7 +16,7 @@ declare module 'express-session' {
   }
 }
 
-export function requireAuth(req: Request, res: Response, next: NextFunction) {
+export async function requireAuth(req: Request, res: Response, next: NextFunction) {
   // 1. Session active via cookie standard
   if (req.session && req.session.user) {
     return next();
@@ -34,10 +34,10 @@ export function requireAuth(req: Request, res: Response, next: NextFunction) {
 
   if (token) {
     try {
-      const sessionRow = db.prepare(`
+      const sessionRow = (await db.prepare(`
         SELECT * FROM sessions 
         WHERE token = ? AND datetime(expires_at) > datetime('now')
-      `).get(token) as any;
+      `).get(token)) as any;
 
       if (sessionRow) {
         const user: AuthenticatedUser = {

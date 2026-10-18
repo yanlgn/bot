@@ -22,14 +22,14 @@ export async function showDepartmentApplicationModal(
 ) {
   if (!interaction.guild) return;
 
-  const dept = db.prepare('SELECT * FROM departments WHERE id = ? AND guild_id = ?').get(deptId, interaction.guild.id) as any;
+  const dept = (await db.prepare('SELECT * FROM departments WHERE id = ? AND guild_id = ?').get(deptId, interaction.guild.id)) as any;
   if (!dept) {
     await interaction.reply({ content: '❌ Ce pôle scientifique est introuvable.', ephemeral: true });
     return;
   }
 
   // Vérifier si déjà membre ou en attente
-  const existing = db.prepare('SELECT * FROM department_members WHERE department_id = ? AND user_id = ?').get(dept.id, interaction.user.id) as any;
+  const existing = (await db.prepare('SELECT * FROM department_members WHERE department_id = ? AND user_id = ?').get(dept.id, interaction.user.id)) as any;
   if (existing) {
     if (existing.status === 'approved') {
       await interaction.reply({
@@ -90,7 +90,7 @@ export async function handleDepartmentModalSubmit(interaction: ModalSubmitIntera
   if (!interaction.guild) return;
 
   const deptId = interaction.customId.replace('cortex_dept_modal_', '');
-  const dept = db.prepare('SELECT * FROM departments WHERE id = ? AND guild_id = ?').get(deptId, interaction.guild.id) as any;
+  const dept = (await db.prepare('SELECT * FROM departments WHERE id = ? AND guild_id = ?').get(deptId, interaction.guild.id)) as any;
   if (!dept) {
     await interaction.reply({ content: '❌ Ce pôle scientifique est introuvable.', ephemeral: true });
     return;
@@ -102,7 +102,7 @@ export async function handleDepartmentModalSubmit(interaction: ModalSubmitIntera
 
   // Enregistrer/mettre à jour l'utilisateur dans users
   try {
-    db.prepare(`
+    await db.prepare(`
       INSERT INTO users (id, username, discriminator, avatar)
       VALUES (?, ?, ?, ?)
       ON CONFLICT(id) DO UPDATE SET
@@ -118,7 +118,7 @@ export async function handleDepartmentModalSubmit(interaction: ModalSubmitIntera
   } catch {}
 
   // Enregistrer la candidature dans department_members
-  db.prepare(`
+  await db.prepare(`
     INSERT INTO department_members (department_id, guild_id, user_id, role, status, motivation, skills, availability, requested_at)
     VALUES (?, ?, ?, 'member', 'pending', ?, ?, ?, datetime('now'))
     ON CONFLICT(department_id, user_id) DO UPDATE SET
@@ -212,7 +212,7 @@ export async function handleDepartmentStaffReview(interaction: ButtonInteraction
   const candidateUserId = parts.slice(1).join('_');
   if (!deptId || !candidateUserId) return;
 
-  const dept = db.prepare('SELECT * FROM departments WHERE id = ? AND guild_id = ?').get(deptId, interaction.guild.id) as any;
+  const dept = (await db.prepare('SELECT * FROM departments WHERE id = ? AND guild_id = ?').get(deptId, interaction.guild.id)) as any;
   if (!dept) {
     await interaction.reply({ content: '❌ Pôle introuvable.', ephemeral: true });
     return;
@@ -233,7 +233,7 @@ export async function handleDepartmentStaffReview(interaction: ButtonInteraction
 
   const newStatus = isApprove ? 'approved' : 'rejected';
 
-  db.prepare(`
+  await db.prepare(`
     UPDATE department_members 
     SET status = ?, reviewed_by = ?, reviewed_at = datetime('now')
     WHERE department_id = ? AND user_id = ?

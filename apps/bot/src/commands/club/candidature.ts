@@ -28,7 +28,7 @@ export async function execute(interaction: ChatInputCommandInteraction) {
     const interests = interestsRaw.split(',').map(s => s.trim());
 
     // Vérifier si une candidature existe déjà en attente
-    const existing = db.prepare('SELECT * FROM candidatures WHERE guild_id = ? AND user_id = ? AND status = \'pending\'')
+    const existing = await db.prepare('SELECT * FROM candidatures WHERE guild_id = ? AND user_id = ? AND status = \'pending\'')
       .get(interaction.guild.id, interaction.user.id);
 
     if (existing) {
@@ -40,7 +40,7 @@ export async function execute(interaction: ChatInputCommandInteraction) {
     }
 
     const candId = randomUUID();
-    db.prepare(`
+    await db.prepare(`
       INSERT INTO candidatures (id, guild_id, user_id, study_field, motivation, interests, status, created_at)
       VALUES (?, ?, ?, ?, ?, ?, 'pending', datetime('now'))
     `).run(candId, interaction.guild.id, interaction.user.id, studyField, motivation, JSON.stringify(interests));
@@ -58,9 +58,9 @@ export async function execute(interaction: ChatInputCommandInteraction) {
 
     await interaction.reply({ embeds: [embed], ephemeral: true });
   } else if (subcommand === 'statut') {
-    const candidate = db.prepare(`
+    const candidate = (await db.prepare(`
       SELECT * FROM candidatures WHERE guild_id = ? AND user_id = ? ORDER BY created_at DESC LIMIT 1
-    `).get(interaction.guild.id, interaction.user.id) as any;
+    `).get(interaction.guild.id, interaction.user.id)) as any;
 
     if (!candidate) {
       await interaction.reply({

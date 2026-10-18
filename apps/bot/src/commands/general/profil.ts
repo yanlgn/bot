@@ -17,25 +17,25 @@ export async function execute(interaction: ChatInputCommandInteraction) {
   const targetUser = interaction.options.getUser('membre') || interaction.user;
   const targetMember = await interaction.guild.members.fetch(targetUser.id).catch(() => null);
 
-  const balance = PointsService.getBalance(interaction.guild.id, targetUser.id);
+  const balance = await PointsService.getBalance(interaction.guild.id, targetUser.id);
 
   // Projets rejoints ou dirigés
-  const projectsCount = db.prepare(`
+  const projectsCount = (await db.prepare(`
     SELECT COUNT(DISTINCT project_id) as count FROM project_members WHERE user_id = ?
-  `).get(targetUser.id) as { count: number };
+  `).get(targetUser.id)) as { count: number };
 
   // Événements rejoints
-  const eventsCount = db.prepare(`
+  const eventsCount = (await db.prepare(`
     SELECT COUNT(*) as count FROM event_participants WHERE user_id = ?
-  `).get(targetUser.id) as { count: number };
+  `).get(targetUser.id)) as { count: number };
 
   // Départements rejoints
-  const userDepts = db.prepare(`
+  const userDepts = (await db.prepare(`
     SELECT d.name, d.icon, dm.role
     FROM department_members dm
     JOIN departments d ON d.id = dm.department_id
     WHERE dm.guild_id = ? AND dm.user_id = ? AND dm.status = 'approved'
-  `).all(interaction.guild.id, targetUser.id) as any[];
+  `).all(interaction.guild.id, targetUser.id)) as any[];
 
   // Badges & Rangs scientifiques
   let rankTitle = '🌱 Apprenti Scientifique';

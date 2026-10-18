@@ -10,20 +10,21 @@ import { randomUUID } from 'crypto';
 
 export const projectsRouter = Router({ mergeParams: true });
 
-projectsRouter.get('/', requireAuth, requireGuildAdmin, (req: Request, res: Response) => {
+projectsRouter.get('/', requireAuth, requireGuildAdmin, async (req: Request, res: Response) => {
   const guildId = req.params.guildId;
-  const projects = db.prepare(`
+  const projects = (await db.prepare(`
     SELECT id, guild_id as guildId, name, description, leader_id as leaderId, channel_id as channelId, status, created_at as createdAt, updated_at as updatedAt
     FROM projects
     WHERE guild_id = ?
     ORDER BY created_at DESC
-  `).all(guildId) as any[];
+  `).all(guildId)) as any[];
 
-  const membersStmt = db.prepare('SELECT user_id FROM project_members WHERE project_id = ?');
-
-  const result = projects.map(p => ({
-    ...p,
-    memberIds: (membersStmt.all(p.id) as { user_id: string }[]).map(m => m.user_id)
+  const result = await Promise.all(projects.map(async p => {
+    const memberRows = (await db.prepare('SELECT user_id FROM project_members WHERE project_id = ?').all(p.id)) as { user_id: string }[];
+    return {
+      ...p,
+      memberIds: memberRows.map(m => m.user_id)
+    };
   }));
 
   res.json({ success: true, data: result });
@@ -56,17 +57,17 @@ projectsRouter.post('/', requireAuth, requireGuildAdmin, validateBody(CreateProj
     } catch {}
   }
 
-  db.prepare(`
+  await db.prepare(`
     INSERT INTO projects (id, guild_id, name, description, leader_id, channel_id, status, created_at, updated_at)
     VALUES (?, ?, ?, ?, ?, ?, 'idea', datetime('now'), datetime('now'))
   `).run(projectId, guild.id, req.body.name, req.body.description, req.body.leaderId, channelId);
 
-  db.prepare('INSERT INTO project_members (project_id, user_id, role) VALUES (?, ?, \'leader\')')
+  await db.prepare('INSERT INTO project_members (project_id, user_id, role) VALUES (?, ?, \'leader\')')
     .run(projectId, req.body.leaderId);
 
   for (const m of req.body.memberIds) {
     if (m !== req.body.leaderId) {
-      db.prepare('INSERT OR IGNORE INTO project_members (project_id, user_id, role) VALUES (?, ?, \'contributor\')').run(projectId, m);
+      await db.prepare('INSERT OR IGNORE INTO project_members (project_id, user_id, role) VALUES (?, ?, \'contributor\')').run(projectId, m);
     }
   }
 
@@ -77,7 +78,7 @@ projectsRouter.patch('/:projectId', requireAuth, requireGuildAdmin, validateBody
   const guild = discordClient.guilds.cache.get(req.params.guildId);
   const projectId = req.params.projectId;
 
-  const project = db.prepare('SELECT * FROM projects WHERE id = ? AND guild_id = ?').get(projectId, req.params.guildId) as any;
+  const project = (await db.prepare('SELECT * FROM projects WHERE id = ? AND guild_id = ?').get(projectId, req.params.guildId)) as any;
   if (!project) return res.status(404).json({ success: false, error: 'Projet introuvable.' });
 
   const updates: string[] = [];
@@ -101,7 +102,7 @@ projectsRouter.patch('/:projectId', requireAuth, requireGuildAdmin, validateBody
   if (updates.length > 0) {
     updates.push("updated_at = datetime('now')");
     params.push(projectId);
-    db.prepare(`UPDATE projects SET ${updates.join(', ')} WHERE id = ?`).run(...params);
+    await db.prepare(`UPDATE projects SET ${updates.join(', ')} WHERE id = ?`).run(...params);
   }
 
   res.json({ success: true, message: 'Projet mis à jour avec succès.' });

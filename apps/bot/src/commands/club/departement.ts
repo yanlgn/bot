@@ -53,14 +53,14 @@ export async function execute(interaction: ChatInputCommandInteraction) {
 
   // 1. Liste des pôles
   if (subcommand === 'liste') {
-    const departments = db.prepare(`
+    const departments = (await db.prepare(`
       SELECT d.*, 
         (SELECT COUNT(*) FROM department_members dm WHERE dm.department_id = d.id AND dm.status = 'approved') as members_count,
         (SELECT COUNT(*) FROM projects p WHERE p.department_id = d.id) as projects_count
       FROM departments d
       WHERE d.guild_id = ? AND d.is_archived = 0
       ORDER BY d.created_at ASC
-    `).all(guildId) as any[];
+    `).all(guildId)) as any[];
 
     if (departments.length === 0) {
       await interaction.reply({
@@ -110,20 +110,20 @@ export async function execute(interaction: ChatInputCommandInteraction) {
   // 2. Info sur un pôle
   if (subcommand === 'info') {
     const query = interaction.options.getString('nom', true).toLowerCase();
-    const dept = db.prepare(`
+    const dept = (await db.prepare(`
       SELECT d.*, 
         (SELECT COUNT(*) FROM department_members dm WHERE dm.department_id = d.id AND dm.status = 'approved') as members_count,
         (SELECT COUNT(*) FROM department_members dm WHERE dm.department_id = d.id AND dm.status = 'pending') as pending_count
       FROM departments d
       WHERE d.guild_id = ? AND (d.id = ? OR LOWER(d.name) LIKE ? OR LOWER(d.short_name) = ?)
-    `).get(guildId, query, `%${query}%`, query) as any;
+    `).get(guildId, query, `%${query}%`, query)) as any;
 
     if (!dept) {
       await interaction.reply({ content: `❌ Pôle introuvable avec "${query}". Tapez \`/departement liste\`.`, ephemeral: true });
       return;
     }
 
-    const projects = db.prepare('SELECT id, name, status FROM projects WHERE department_id = ? LIMIT 5').all(dept.id) as any[];
+    const projects = (await db.prepare('SELECT id, name, status FROM projects WHERE department_id = ? LIMIT 5').all(dept.id)) as any[];
 
     const embed = new EmbedBuilder()
       .setTitle(`${dept.icon || '🔬'} Pôle Scientifique : ${dept.name}`)
@@ -157,10 +157,10 @@ export async function execute(interaction: ChatInputCommandInteraction) {
   // 3. Rejoindre via formulaire Modal
   if (subcommand === 'rejoindre') {
     const query = interaction.options.getString('nom', true).toLowerCase();
-    const dept = db.prepare(`
+    const dept = (await db.prepare(`
       SELECT * FROM departments 
       WHERE guild_id = ? AND is_archived = 0 AND (id = ? OR LOWER(name) LIKE ? OR LOWER(short_name) = ?)
-    `).get(guildId, query, `%${query}%`, query) as any;
+    `).get(guildId, query, `%${query}%`, query)) as any;
 
     if (!dept) {
       await interaction.reply({
@@ -180,13 +180,13 @@ export async function execute(interaction: ChatInputCommandInteraction) {
     const member = await interaction.guild.members.fetch(interaction.user.id);
     const isAdmin = member.permissions.has(PermissionFlagsBits.Administrator) || member.permissions.has(PermissionFlagsBits.ManageGuild);
 
-    const pending = db.prepare(`
+    const pending = (await db.prepare(`
       SELECT dm.*, d.name as dept_name, d.icon as dept_icon, d.leader_role_id
       FROM department_members dm
       JOIN departments d ON d.id = dm.department_id
       WHERE dm.guild_id = ? AND dm.status = 'pending'
       ORDER BY dm.requested_at ASC
-    `).all(guildId) as any[];
+    `).all(guildId)) as any[];
 
     const filtered = pending.filter(p => {
       if (isAdmin) return true;
@@ -219,10 +219,10 @@ export async function execute(interaction: ChatInputCommandInteraction) {
   if (subcommand === 'valider' || subcommand === 'refuser') {
     const query = interaction.options.getString('nom', true).toLowerCase();
     const targetUser = interaction.options.getUser('membre', true);
-    const dept = db.prepare(`
+    const dept = (await db.prepare(`
       SELECT * FROM departments 
       WHERE guild_id = ? AND (id = ? OR LOWER(name) LIKE ? OR LOWER(short_name) = ?)
-    `).get(guildId, query, `%${query}%`, query) as any;
+    `).get(guildId, query, `%${query}%`, query)) as any;
 
     if (!dept) {
       await interaction.reply({ content: `❌ Pôle introuvable.`, ephemeral: true });
@@ -244,7 +244,7 @@ export async function execute(interaction: ChatInputCommandInteraction) {
     const isApprove = subcommand === 'valider';
     const newStatus = isApprove ? 'approved' : 'rejected';
 
-    db.prepare(`
+    await db.prepare(`
       UPDATE department_members 
       SET status = ?, reviewed_by = ?, reviewed_at = datetime('now')
       WHERE department_id = ? AND user_id = ?

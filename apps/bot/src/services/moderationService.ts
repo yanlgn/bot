@@ -19,14 +19,14 @@ export class ModerationService {
     const warningId = randomUUID();
 
     // Insertion du warning
-    db.prepare(`
+    await db.prepare(`
       INSERT INTO warnings (id, guild_id, user_id, moderator_id, reason, created_at)
       VALUES (?, ?, ?, ?, ?, datetime('now'))
     `).run(warningId, guild.id, userId, moderator.id, reason);
 
     // Compte total des avertissements actifs
-    const countRow = db.prepare('SELECT COUNT(*) as count FROM warnings WHERE guild_id = ? AND user_id = ?')
-      .get(guild.id, userId) as { count: number };
+    const countRow = (await db.prepare('SELECT COUNT(*) as count FROM warnings WHERE guild_id = ? AND user_id = ?')
+      .get(guild.id, userId)) as { count: number };
     const warningCount = countRow.count;
 
     const config = ConfigService.getGuildConfig(guild.id);
@@ -46,7 +46,7 @@ export class ModerationService {
           autoMuted = true;
 
           // Enregistrer la sanction
-          db.prepare(`
+          await db.prepare(`
             INSERT INTO sanctions (id, guild_id, user_id, moderator_id, type, reason, duration_minutes, created_at)
             VALUES (?, ?, ?, ?, 'mute', ?, ?, datetime('now'))
           `).run(
@@ -106,22 +106,22 @@ export class ModerationService {
   /**
    * Retourne l'historique des avertissements d'un membre ou du serveur
    */
-  static getWarnings(guildId: string, userId?: string): WarningRecord[] {
+  static async getWarnings(guildId: string, userId?: string): Promise<WarningRecord[]> {
     if (userId) {
-      return db.prepare(`
+      return (await db.prepare(`
         SELECT id, guild_id as guildId, user_id as userId, moderator_id as moderatorId, reason, created_at as createdAt
         FROM warnings
         WHERE guild_id = ? AND user_id = ?
         ORDER BY created_at DESC
-      `).all(guildId, userId) as unknown as WarningRecord[];
+      `).all(guildId, userId)) as unknown as WarningRecord[];
     }
 
-    return db.prepare(`
+    return (await db.prepare(`
       SELECT id, guild_id as guildId, user_id as userId, moderator_id as moderatorId, reason, created_at as createdAt
       FROM warnings
       WHERE guild_id = ?
       ORDER BY created_at DESC
       LIMIT 100
-    `).all(guildId) as unknown as WarningRecord[];
+    `).all(guildId)) as unknown as WarningRecord[];
   }
 }

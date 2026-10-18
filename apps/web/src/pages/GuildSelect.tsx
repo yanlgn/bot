@@ -1,7 +1,7 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth, UserGuild } from '../context/AuthContext';
-import { Server, ArrowRight, ShieldAlert, Plus, ExternalLink, RefreshCw } from 'lucide-react';
+import { Server, ArrowRight, ShieldAlert, Plus, RefreshCw } from 'lucide-react';
 
 const CORTEX_CLIENT_ID = '1350228159005724772';
 

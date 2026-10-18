@@ -25,9 +25,9 @@ import { addDepartmentToConfig, removeDepartmentFromConfig } from '../utils/conf
 
 export const departmentsRouter = Router({ mergeParams: true });
 
-function recordAudit(guildId: string, userId: string, username: string, action: string, targetId: string, details: string) {
+async function recordAudit(guildId: string, userId: string, username: string, action: string, targetId: string, details: string) {
   try {
-    db.prepare(`
+    await db.prepare(`
       INSERT INTO audit_logs (id, guild_id, user_id, username, action, target_type, target_id, details, created_at)
       VALUES (?, ?, ?, ?, ?, 'department', ?, ?, datetime('now'))
     `).run(randomUUID(), guildId, userId, username, action, targetId, details);
@@ -40,7 +40,7 @@ function recordAudit(guildId: string, userId: string, username: string, action: 
 departmentsRouter.get('/', requireAuth, async (req: Request, res: Response) => {
   try {
     const guildId = req.params.guildId;
-    const departments = db.prepare(`
+    const departments = (await db.prepare(`
       SELECT 
         d.*,
         (SELECT COUNT(*) FROM department_members dm WHERE dm.department_id = d.id AND dm.status = 'approved') as member_count,
@@ -49,7 +49,7 @@ departmentsRouter.get('/', requireAuth, async (req: Request, res: Response) => {
       FROM departments d
       WHERE d.guild_id = ? AND d.is_archived = 0
       ORDER BY d.created_at ASC
-    `).all(guildId) as any[];
+    `).all(guildId)) as any[];
 
     // Compléter avec les données Discord (noms des rôles et catégories)
     const guild = discordClient.guilds.cache.get(guildId);
@@ -190,7 +190,7 @@ departmentsRouter.post('/', requireAuth, requireGuildAdmin, validateBody(CreateD
     }
 
     // 4. Enregistrement Base SQLite
-    db.prepare(`
+    await db.prepare(`
       INSERT INTO departments (
         id, guild_id, name, short_name, icon, color, description, 
         leader_role_id, member_role_id, category_id, is_archived, created_at, updated_at
@@ -210,7 +210,7 @@ departmentsRouter.post('/', requireAuth, requireGuildAdmin, validateBody(CreateD
 
     // Si leader désigné, enregistrer dans department_members
     if (body.leaderUserId) {
-      db.prepare(`
+      await db.prepare(`
         INSERT INTO department_members (department_id, guild_id, user_id, role, status, requested_at, reviewed_by, reviewed_at)
         VALUES (?, ?, ?, 'leader', 'approved', datetime('now'), ?, datetime('now'))
       `).run(deptId, guild.id, body.leaderUserId, user.id);
@@ -259,7 +259,7 @@ departmentsRouter.delete('/:deptId', requireAuth, requireGuildAdmin, async (req:
   const guild = discordClient.guilds.cache.get(req.params.guildId);
   if (!guild) return res.status(404).json({ success: false, error: 'Serveur introuvable.' });
 
-  const dept = db.prepare('SELECT * FROM departments WHERE id = ? AND guild_id = ?').get(req.params.deptId, guild.id) as any;
+  const dept = (await db.prepare('SELECT * FROM departments WHERE id = ? AND guild_id = ?').get(req.params.deptId, guild.id)) as any;
   if (!dept) return res.status(404).json({ success: false, error: 'Pôle introuvable.' });
 
   const user = req.session.user!;
@@ -296,7 +296,7 @@ departmentsRouter.delete('/:deptId', requireAuth, requireGuildAdmin, async (req:
     }
 
     // 2. Marquer comme archivé en base de données
-    db.prepare('UPDATE departments SET is_archived = 1, updated_at = datetime(\'now\') WHERE id = ?').run(dept.id);
+    await db.prepare('UPDATE departments SET is_archived = 1, updated_at = datetime(\'now\') WHERE id = ?').run(dept.id);
 
     // 3. Mettre à jour le fichier JSON déclaratif
     try {
@@ -320,7 +320,7 @@ departmentsRouter.delete('/:deptId', requireAuth, requireGuildAdmin, async (req:
  */
 departmentsRouter.get('/:deptId/members', requireAuth, async (req: Request, res: Response) => {
   const guild = discordClient.guilds.cache.get(req.params.guildId);
-  const dept = db.prepare('SELECT * FROM departments WHERE id = ? AND guild_id = ?').get(req.params.deptId, req.params.guildId) as any;
+  const dept = (await db.prepare('SELECT * FROM departments WHERE id = ? AND guild_id = ?').get(req.params.deptId, req.params.guildId)) as any;
   if (!dept) return res.status(404).json({ success: false, error: 'Pôle introuvable.' });
 
   try {
@@ -331,13 +331,13 @@ departmentsRouter.get('/:deptId/members', requireAuth, async (req: Request, res:
           const leaderRole = guild.roles.cache.get(dept.leader_role_id);
           if (leaderRole) {
             for (const [mId, m] of leaderRole.members) {
-              db.prepare(`
+              await db.prepare(`
                 INSERT INTO department_members (department_id, guild_id, user_id, role, status, requested_at, reviewed_at)
                 VALUES (?, ?, ?, 'leader', 'approved', datetime('now'), datetime('now'))
                 ON CONFLICT(department_id, user_id) DO UPDATE SET role = 'leader', status = 'approved'
               `).run(dept.id, req.params.guildId, mId);
 
-              db.prepare(`
+              await db.prepare(`
                 INSERT INTO users (id, username, discriminator, avatar)
                 VALUES (?, ?, ?, ?)
                 ON CONFLICT(id) DO UPDATE SET username = excluded.username, avatar = excluded.avatar
@@ -350,13 +350,13 @@ departmentsRouter.get('/:deptId/members', requireAuth, async (req: Request, res:
           const memberRole = guild.roles.cache.get(dept.member_role_id);
           if (memberRole) {
             for (const [mId, m] of memberRole.members) {
-              db.prepare(`
+              await db.prepare(`
                 INSERT INTO department_members (department_id, guild_id, user_id, role, status, requested_at, reviewed_at)
                 VALUES (?, ?, ?, 'member', 'approved', datetime('now'), datetime('now'))
                 ON CONFLICT(department_id, user_id) DO NOTHING
               `).run(dept.id, req.params.guildId, mId);
 
-              db.prepare(`
+              await db.prepare(`
                 INSERT INTO users (id, username, discriminator, avatar)
                 VALUES (?, ?, ?, ?)
                 ON CONFLICT(id) DO UPDATE SET username = excluded.username, avatar = excluded.avatar
@@ -367,13 +367,13 @@ departmentsRouter.get('/:deptId/members', requireAuth, async (req: Request, res:
       } catch {}
     }
 
-    const records = db.prepare(`
+    const records = (await db.prepare(`
       SELECT dm.*, u.username, u.avatar
       FROM department_members dm
       LEFT JOIN users u ON u.id = dm.user_id
       WHERE dm.department_id = ?
       ORDER BY dm.requested_at DESC
-    `).all(dept.id) as any[];
+    `).all(dept.id)) as any[];
 
     // Récupérer les pseudos Discord si possible
     const enriched = await Promise.all(records.map(async (r) => {
@@ -417,16 +417,16 @@ departmentsRouter.get('/:deptId/members', requireAuth, async (req: Request, res:
 departmentsRouter.post('/:deptId/join', requireAuth, async (req: Request, res: Response) => {
   const user = req.session.user!;
   const guildId = req.params.guildId;
-  const dept = db.prepare('SELECT * FROM departments WHERE id = ? AND guild_id = ?').get(req.params.deptId, guildId) as any;
+  const dept = (await db.prepare('SELECT * FROM departments WHERE id = ? AND guild_id = ?').get(req.params.deptId, guildId)) as any;
   if (!dept) return res.status(404).json({ success: false, error: 'Pôle introuvable.' });
 
-  const existing = db.prepare('SELECT * FROM department_members WHERE department_id = ? AND user_id = ?').get(dept.id, user.id) as any;
+  const existing = (await db.prepare('SELECT * FROM department_members WHERE department_id = ? AND user_id = ?').get(dept.id, user.id)) as any;
   if (existing) {
     if (existing.status === 'approved') return res.status(400).json({ success: false, error: 'Vous êtes déjà membre de ce pôle.' });
     if (existing.status === 'pending') return res.status(400).json({ success: false, error: 'Votre candidature est déjà en cours d\'examen.' });
   }
 
-  db.prepare(`
+  await db.prepare(`
     INSERT INTO department_members (department_id, guild_id, user_id, role, status, requested_at)
     VALUES (?, ?, ?, 'member', 'pending', datetime('now'))
     ON CONFLICT(department_id, user_id) DO UPDATE SET
@@ -443,14 +443,14 @@ departmentsRouter.post('/:deptId/join', requireAuth, async (req: Request, res: R
  */
 departmentsRouter.post('/:deptId/members/:userId/review', requireAuth, requireGuildAdmin, validateBody(ReviewDepartmentMemberSchema), async (req: Request, res: Response) => {
   const { deptId, userId, guildId } = req.params;
-  const dept = db.prepare('SELECT * FROM departments WHERE id = ? AND guild_id = ?').get(deptId, guildId) as any;
+  const dept = (await db.prepare('SELECT * FROM departments WHERE id = ? AND guild_id = ?').get(deptId, guildId)) as any;
   if (!dept) return res.status(404).json({ success: false, error: 'Pôle introuvable.' });
 
   const reviewer = req.session.user!;
   const { action } = req.body;
   const newStatus = action === 'approve' ? 'approved' : 'rejected';
 
-  db.prepare(`
+  await db.prepare(`
     UPDATE department_members
     SET status = ?, reviewed_by = ?, reviewed_at = datetime('now')
     WHERE department_id = ? AND user_id = ?
@@ -503,11 +503,11 @@ departmentsRouter.post('/send-panel', requireAuth, requireGuildAdmin, async (req
     return res.status(403).json({ success: false, error: 'Le bot n\'a pas la permission d\'envoyer des messages et des embeds dans ce salon.' });
   }
 
-  const departments = db.prepare(`
+  const departments = (await db.prepare(`
     SELECT * FROM departments 
     WHERE guild_id = ? AND is_archived = 0
     ORDER BY created_at ASC
-  `).all(guildId) as any[];
+  `).all(guildId)) as any[];
 
   if (departments.length === 0) {
     return res.status(400).json({ success: false, error: 'Aucun pôle scientifique actif n\'a encore été configuré sur ce serveur.' });

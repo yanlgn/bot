@@ -87,7 +87,7 @@ export async function execute(interaction: ChatInputCommandInteraction) {
 
     const resourceId = randomUUID();
 
-    db.prepare(`
+    await db.prepare(`
       INSERT INTO resources (id, guild_id, title, description, url, category, tags, author_id, created_at)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
     `).run(resourceId, interaction.guild.id, title, description, url, category, JSON.stringify(tags), interaction.user.id);
@@ -146,7 +146,7 @@ export async function execute(interaction: ChatInputCommandInteraction) {
 
     query += ' ORDER BY created_at DESC LIMIT 8';
 
-    const results = db.prepare(query).all(...params) as any[];
+    const results = (await db.prepare(query).all(...params)) as any[];
 
     if (results.length === 0) {
       await interaction.reply({

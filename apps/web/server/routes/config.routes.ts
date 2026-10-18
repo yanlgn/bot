@@ -25,7 +25,7 @@ function getConfigPaths(guildId: string) {
 /**
  * GET /api/guilds/:guildId/config
  */
-configRouter.get('/', requireAuth, requireGuildAdmin, (req: Request, res: Response) => {
+configRouter.get('/', requireAuth, requireGuildAdmin, async (req: Request, res: Response) => {
   const { filepath } = getConfigPaths(req.params.guildId);
 
   if (!fs.existsSync(filepath)) {
@@ -33,7 +33,7 @@ configRouter.get('/', requireAuth, requireGuildAdmin, (req: Request, res: Respon
       const defaultConfig = getDefaultCortexConfig(req.params.guildId);
       fs.writeFileSync(filepath, JSON.stringify(defaultConfig, null, 2), 'utf8');
 
-      db.prepare(`
+      await db.prepare(`
         INSERT INTO guild_configs (guild_id, config_json, updated_at)
         VALUES (?, ?, datetime('now'))
         ON CONFLICT(guild_id) DO UPDATE SET
@@ -74,7 +74,7 @@ configRouter.post('/validate', requireAuth, requireGuildAdmin, (req: Request, re
 /**
  * PUT /api/guilds/:guildId/config
  */
-configRouter.put('/', requireAuth, requireGuildAdmin, (req: Request, res: Response) => {
+configRouter.put('/', requireAuth, requireGuildAdmin, async (req: Request, res: Response) => {
   const parsed = GuildConfigFileSchema.safeParse(req.body);
   if (!parsed.success) {
     return res.status(400).json({
@@ -95,7 +95,7 @@ configRouter.put('/', requireAuth, requireGuildAdmin, (req: Request, res: Respon
     const backupPath = path.join(backupDir, backupFilename);
     fs.copyFileSync(filepath, backupPath);
 
-    db.prepare(`
+    await db.prepare(`
       INSERT INTO backups (id, guild_id, filename, filepath, created_by, created_at)
       VALUES (?, ?, ?, ?, ?, datetime('now'))
     `).run(randomUUID(), req.params.guildId, backupFilename, backupPath, user.username);
@@ -105,7 +105,7 @@ configRouter.put('/', requireAuth, requireGuildAdmin, (req: Request, res: Respon
   fs.writeFileSync(filepath, JSON.stringify(parsed.data, null, 2), 'utf8');
 
   // 3. Synchronisation base de données SQL
-  db.prepare(`
+  await db.prepare(`
     INSERT INTO guild_configs (guild_id, config_json, updated_at)
     VALUES (?, ?, datetime('now'))
     ON CONFLICT(guild_id) DO UPDATE SET
@@ -115,7 +115,7 @@ configRouter.put('/', requireAuth, requireGuildAdmin, (req: Request, res: Respon
   `).run(req.params.guildId, JSON.stringify(parsed.data));
 
   // 4. Audit Log
-  db.prepare(`
+  await db.prepare(`
     INSERT INTO audit_logs (id, guild_id, user_id, username, action, target_type, target_id, details, created_at)
     VALUES (?, ?, ?, ?, 'CONFIG_SAVED', 'config', ?, ?, datetime('now'))
   `).run(randomUUID(), req.params.guildId, user.id, user.username, req.params.guildId, `Config mise à jour. Backup : ${backupFilename || 'Premier enregistrement'}`);
@@ -298,7 +298,7 @@ configRouter.post('/apply', requireAuth, requireGuildAdmin, async (req: Request,
         }
 
         // Enregistrer en base SQL
-        db.prepare(`
+        await db.prepare(`
           INSERT INTO departments (id, guild_id, name, short_name, icon, color, description, leader_role_id, member_role_id, category_id, updated_at)
           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
           ON CONFLICT(id) DO UPDATE SET
@@ -341,8 +341,8 @@ configRouter.post('/apply', requireAuth, requireGuildAdmin, async (req: Request,
 /**
  * GET /api/guilds/:guildId/config/backups
  */
-configRouter.get('/backups', requireAuth, requireGuildAdmin, (req: Request, res: Response) => {
-  const backups = db.prepare(`
+configRouter.get('/backups', requireAuth, requireGuildAdmin, async (req: Request, res: Response) => {
+  const backups = await db.prepare(`
     SELECT id, filename, created_at as createdAt, created_by as createdBy
     FROM backups
     WHERE guild_id = ?
@@ -355,12 +355,12 @@ configRouter.get('/backups', requireAuth, requireGuildAdmin, (req: Request, res:
 /**
  * POST /api/guilds/:guildId/config/restore
  */
-configRouter.post('/restore', requireAuth, requireGuildAdmin, (req: Request, res: Response) => {
+configRouter.post('/restore', requireAuth, requireGuildAdmin, async (req: Request, res: Response) => {
   const { backupId } = req.body;
   if (!backupId) return res.status(400).json({ success: false, error: 'backupId requis.' });
 
-  const record = db.prepare('SELECT filepath FROM backups WHERE id = ? AND guild_id = ?')
-    .get(backupId, req.params.guildId) as { filepath: string } | undefined;
+  const record = (await db.prepare('SELECT filepath FROM backups WHERE id = ? AND guild_id = ?')
+    .get(backupId, req.params.guildId)) as { filepath: string } | undefined;
 
   if (!record || !fs.existsSync(record.filepath)) {
     return res.status(404).json({ success: false, error: 'Fichier de sauvegarde introuvable.' });
@@ -375,7 +375,7 @@ configRouter.post('/restore', requireAuth, requireGuildAdmin, (req: Request, res
     fs.writeFileSync(filepath, JSON.stringify(validated, null, 2), 'utf8');
 
     const user = req.session.user!;
-    db.prepare(`
+    await db.prepare(`
       INSERT INTO audit_logs (id, guild_id, user_id, username, action, target_type, target_id, details, created_at)
       VALUES (?, ?, ?, ?, 'CONFIG_RESTORED', 'config', ?, ?, datetime('now'))
     `).run(randomUUID(), req.params.guildId, user.id, user.username, backupId, `Restauration depuis la sauvegarde ${backupId}`);
@@ -389,8 +389,8 @@ configRouter.post('/restore', requireAuth, requireGuildAdmin, (req: Request, res
 /**
  * GET /api/guilds/:guildId/audit-logs
  */
-configRouter.get('/audit-logs', requireAuth, requireGuildAdmin, (req: Request, res: Response) => {
-  const logs = db.prepare(`
+configRouter.get('/audit-logs', requireAuth, requireGuildAdmin, async (req: Request, res: Response) => {
+  const logs = await db.prepare(`
     SELECT id, user_id as userId, username, action, target_type as targetType, target_id as targetId, details, created_at as createdAt
     FROM audit_logs
     WHERE guild_id = ?

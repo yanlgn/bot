@@ -19,8 +19,8 @@ function getGuildConfig(guildId: string) {
   return null;
 }
 
-moderationRouter.get('/warnings', requireAuth, requireGuildAdmin, (req: Request, res: Response) => {
-  const warnings = db.prepare(`
+moderationRouter.get('/warnings', requireAuth, requireGuildAdmin, async (req: Request, res: Response) => {
+  const warnings = await db.prepare(`
     SELECT id, guild_id as guildId, user_id as userId, moderator_id as moderatorId, reason, created_at as createdAt
     FROM warnings
     WHERE guild_id = ?
@@ -41,13 +41,13 @@ moderationRouter.post('/warn', requireAuth, requireGuildAdmin, async (req: Reque
   const user = req.session.user!;
   const warningId = randomUUID();
 
-  db.prepare(`
+  await db.prepare(`
     INSERT INTO warnings (id, guild_id, user_id, moderator_id, reason, created_at)
     VALUES (?, ?, ?, ?, ?, datetime('now'))
   `).run(warningId, guild.id, userId, user.id, reason);
 
-  const countRow = db.prepare('SELECT COUNT(*) as count FROM warnings WHERE guild_id = ? AND user_id = ?')
-    .get(guild.id, userId) as { count: number };
+  const countRow = (await db.prepare('SELECT COUNT(*) as count FROM warnings WHERE guild_id = ? AND user_id = ?')
+    .get(guild.id, userId)) as { count: number };
   const warningCount = countRow.count;
 
   const config = getGuildConfig(guild.id);

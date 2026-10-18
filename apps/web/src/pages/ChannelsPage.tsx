@@ -3,7 +3,7 @@ import { useParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiFetch } from '../api/client';
 import { DiscordChannelData } from '@sciclub/shared';
-import { Hash, Volume2, Folder, MessagesSquare, Plus, Lock, Unlock, Trash2, Edit3 } from 'lucide-react';
+import { Hash, Volume2, Folder, MessagesSquare, Plus, Lock, Trash2, Edit3 } from 'lucide-react';
 import { Badge } from '../components/common/Badge';
 import { Modal } from '../components/common/Modal';
 import { ConfirmDialog } from '../components/common/ConfirmDialog';

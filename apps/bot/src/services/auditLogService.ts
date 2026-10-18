@@ -4,7 +4,7 @@ import { AuditLogRecord } from '@sciclub/shared';
 import { logger } from '../utils/logger.js';
 
 export class AuditLogService {
-  static record(entry: {
+  static async record(entry: {
     guildId: string;
     userId: string;
     username: string;
@@ -12,14 +12,14 @@ export class AuditLogService {
     targetType: 'role' | 'channel' | 'permission' | 'member' | 'project' | 'event' | 'resource' | 'config';
     targetId?: string | null;
     details: string;
-  }): void {
+  }): Promise<void> {
     try {
       const id = randomUUID();
       const stmt = db.prepare(`
         INSERT INTO audit_logs (id, guild_id, user_id, username, action, target_type, target_id, details, created_at)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
       `);
-      stmt.run(
+      await stmt.run(
         id,
         entry.guildId,
         entry.userId,
@@ -35,7 +35,7 @@ export class AuditLogService {
     }
   }
 
-  static getRecentLogs(guildId: string, limit: number = 50): AuditLogRecord[] {
+  static async getRecentLogs(guildId: string, limit: number = 50): Promise<AuditLogRecord[]> {
     const stmt = db.prepare(`
       SELECT 
         id,
@@ -52,6 +52,6 @@ export class AuditLogService {
       ORDER BY created_at DESC
       LIMIT ?
     `);
-    return stmt.all(guildId, limit) as unknown as AuditLogRecord[];
+    return (await stmt.all(guildId, limit)) as unknown as AuditLogRecord[];
   }
 }

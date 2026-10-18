@@ -10,20 +10,20 @@ statsRouter.get('/', requireAuth, requireGuildAdmin, async (req: Request, res: R
   const guild = discordClient.guilds.cache.get(req.params.guildId);
   if (!guild) return res.status(404).json({ success: false, error: 'Serveur introuvable.' });
 
-  const projectCount = (db.prepare('SELECT COUNT(*) as count FROM projects WHERE guild_id = ?').get(guild.id) as any).count;
-  const eventCount = (db.prepare('SELECT COUNT(*) as count FROM events WHERE guild_id = ?').get(guild.id) as any).count;
-  const resourceCount = (db.prepare('SELECT COUNT(*) as count FROM resources WHERE guild_id = ?').get(guild.id) as any).count;
-  const warningCount = (db.prepare('SELECT COUNT(*) as count FROM warnings WHERE guild_id = ?').get(guild.id) as any).count;
+  const projectCount = ((await db.prepare('SELECT COUNT(*) as count FROM projects WHERE guild_id = ?').get(guild.id)) as any)?.count || 0;
+  const eventCount = ((await db.prepare('SELECT COUNT(*) as count FROM events WHERE guild_id = ?').get(guild.id)) as any)?.count || 0;
+  const resourceCount = ((await db.prepare('SELECT COUNT(*) as count FROM resources WHERE guild_id = ?').get(guild.id)) as any)?.count || 0;
+  const warningCount = ((await db.prepare('SELECT COUNT(*) as count FROM warnings WHERE guild_id = ?').get(guild.id)) as any)?.count || 0;
 
-  const topPoints = db.prepare(`
+  const topPoints = (await db.prepare(`
     SELECT user_id as userId, balance
     FROM points
     WHERE guild_id = ?
     ORDER BY balance DESC
     LIMIT 5
-  `).all(guild.id) as { userId: string; balance: number }[];
+  `).all(guild.id)) as { userId: string; balance: number }[];
 
-  const recentLogs = db.prepare(`
+  const recentLogs = await db.prepare(`
     SELECT id, user_id as userId, username, action, target_type as targetType, details, created_at as createdAt
     FROM audit_logs
     WHERE guild_id = ?

@@ -7,8 +7,6 @@ import {
   Shield,
   Hash,
   Rocket,
-  Calendar,
-  BookOpen,
   Award,
   Activity
 } from 'lucide-react';

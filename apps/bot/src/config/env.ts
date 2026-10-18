@@ -25,6 +25,7 @@ const EnvSchema = z.object({
   LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace']).default('info'),
   DISCORD_BOT_TOKEN: z.string().min(1, 'DISCORD_BOT_TOKEN (ou DISCORD_TOKEN) est requis'),
   DISCORD_CLIENT_ID: z.string().default('1350228159005724772'),
+  DATABASE_URL: z.string().optional(),
   DATABASE_PATH: z.string().default('./data/sciclub.sqlite'),
   CONFIG_PATH: z.string().default('./config/guilds'),
   BACKUP_PATH: z.string().default('./config/backups')

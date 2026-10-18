@@ -6,9 +6,9 @@ import { randomUUID } from 'crypto';
 export const name = Events.GuildMemberUpdate;
 export const once = false;
 
-function recordAudit(guildId: string, userId: string, username: string, action: string, targetId: string, details: string) {
+async function recordAudit(guildId: string, userId: string, username: string, action: string, targetId: string, details: string) {
   try {
-    db.prepare(`
+    await db.prepare(`
       INSERT INTO audit_logs (id, guild_id, user_id, username, action, target_type, target_id, details, created_at)
       VALUES (?, ?, ?, ?, ?, 'department_member', ?, ?, datetime('now'))
     `).run(randomUUID(), guildId, userId, username, action, targetId, details);
@@ -21,7 +21,7 @@ export async function execute(oldMember: GuildMember | PartialGuildMember, newMe
 
     // Sauvegarder/mettre à jour l'utilisateur en base
     try {
-      db.prepare(`
+      await db.prepare(`
         INSERT INTO users (id, username, discriminator, avatar)
         VALUES (?, ?, ?, ?)
         ON CONFLICT(id) DO UPDATE SET
@@ -37,10 +37,10 @@ export async function execute(oldMember: GuildMember | PartialGuildMember, newMe
     } catch {}
 
     // Récupérer les départements du serveur
-    const departments = db.prepare(`
+    const departments = (await db.prepare(`
       SELECT * FROM departments 
       WHERE guild_id = ? AND is_archived = 0
-    `).all(guildId) as any[];
+    `).all(guildId)) as any[];
 
     if (!departments || departments.length === 0) return;
 
@@ -60,7 +60,7 @@ export async function execute(oldMember: GuildMember | PartialGuildMember, newMe
 
         if (!hadLeader && hasLeader) {
           // Attribué en chef de pôle
-          db.prepare(`
+          await db.prepare(`
             INSERT INTO department_members (department_id, guild_id, user_id, role, status, requested_at, reviewed_at)
             VALUES (?, ?, ?, 'leader', 'approved', datetime('now'), datetime('now'))
             ON CONFLICT(department_id, user_id) DO UPDATE SET
@@ -74,13 +74,13 @@ export async function execute(oldMember: GuildMember | PartialGuildMember, newMe
         } else if (hadLeader && !hasLeader) {
           // Retiré du rôle chef de pôle
           if (memberRoleId && newRoles.has(memberRoleId)) {
-            db.prepare(`
+            await db.prepare(`
               UPDATE department_members 
               SET role = 'member', updated_at = datetime('now')
               WHERE department_id = ? AND user_id = ?
             `).run(dept.id, newMember.user.id);
           } else {
-            db.prepare(`
+            await db.prepare(`
               DELETE FROM department_members
               WHERE department_id = ? AND user_id = ?
             `).run(dept.id, newMember.user.id);
@@ -100,7 +100,7 @@ export async function execute(oldMember: GuildMember | PartialGuildMember, newMe
           const isLeader = leaderRoleId && newRoles.has(leaderRoleId);
           const assignedRole = isLeader ? 'leader' : 'member';
 
-          db.prepare(`
+          await db.prepare(`
             INSERT INTO department_members (department_id, guild_id, user_id, role, status, requested_at, reviewed_at)
             VALUES (?, ?, ?, ?, 'approved', datetime('now'), datetime('now'))
             ON CONFLICT(department_id, user_id) DO UPDATE SET
@@ -115,7 +115,7 @@ export async function execute(oldMember: GuildMember | PartialGuildMember, newMe
           // Retiré du rôle membre
           const isLeader = leaderRoleId && newRoles.has(leaderRoleId);
           if (!isLeader) {
-            db.prepare(`
+            await db.prepare(`
               DELETE FROM department_members
               WHERE department_id = ? AND user_id = ?
             `).run(dept.id, newMember.user.id);

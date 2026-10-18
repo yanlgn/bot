@@ -107,7 +107,7 @@ export async function execute(interaction: ChatInputCommandInteraction) {
       await interaction.editReply({ content: `❌ Erreur lors de la création : ${err.message}` });
     }
   } else if (subcommand === 'liste') {
-    const events = EventService.getEvents(interaction.guild.id);
+    const events = await EventService.getEvents(interaction.guild.id);
 
     if (events.length === 0) {
       await interaction.reply({ content: 'ℹ️ Aucun événement n\'est actuellement programmé. Consultez le salon d\'annonces pour les prochaines dates !', ephemeral: true });
@@ -139,7 +139,7 @@ export async function execute(interaction: ChatInputCommandInteraction) {
 
     try {
       await EventService.registerParticipant(interaction.guild, eventId, interaction.user.id);
-      const events = EventService.getEvents(interaction.guild.id);
+      const events = await EventService.getEvents(interaction.guild.id);
       const ev = events.find(e => e.id === eventId);
 
       const embed = new EmbedBuilder()

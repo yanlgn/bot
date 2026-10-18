@@ -3,8 +3,7 @@ import { useParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiFetch } from '../api/client';
 import { DiscordChannelData, DiscordRoleData, DiscordPermissionState, DISCORD_PERMISSIONS } from '@sciclub/shared';
-import { KeyRound, Shield, Check, X, Minus, Save } from 'lucide-react';
-import { Badge } from '../components/common/Badge';
+import { KeyRound, Check, X, Minus, Save } from 'lucide-react';
 
 export const PermissionsPage: React.FC = () => {
   const { guildId } = useParams<{ guildId: string }>();
@@ -84,16 +83,7 @@ export const PermissionsPage: React.FC = () => {
     }
   });
 
-  const togglePermission = (flag: string) => {
-    setPermStates(prev => {
-      const current = prev[flag] || 'NEUTRAL';
-      let next: DiscordPermissionState = 'ALLOW';
-      if (current === 'ALLOW') next = 'DENY';
-      else if (current === 'DENY') next = 'NEUTRAL';
-      else next = 'ALLOW';
-      return { ...prev, [flag]: next };
-    });
-  };
+
 
   const selectedChannel = channels.find(c => c.id === selectedChannelId);
   const selectedRole = roles.find(r => r.id === selectedRoleId);

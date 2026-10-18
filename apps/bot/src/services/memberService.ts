@@ -13,11 +13,11 @@ export class MemberService {
 
     // Récupération des points et avertissements depuis SQLite
     const pointsStmt = db.prepare('SELECT user_id, balance FROM points WHERE guild_id = ?');
-    const pointsRows = pointsStmt.all(guild.id) as { user_id: string; balance: number }[];
+    const pointsRows = (await pointsStmt.all(guild.id)) as { user_id: string; balance: number }[];
     const pointsMap = new Map(pointsRows.map(r => [r.user_id, r.balance]));
 
     const warnStmt = db.prepare('SELECT user_id, COUNT(*) as count FROM warnings WHERE guild_id = ? GROUP BY user_id');
-    const warnRows = warnStmt.all(guild.id) as { user_id: string; count: number }[];
+    const warnRows = (await warnStmt.all(guild.id)) as { user_id: string; count: number }[];
     const warnMap = new Map(warnRows.map(r => [r.user_id, r.count]));
 
     for (const [, member] of fetched) {

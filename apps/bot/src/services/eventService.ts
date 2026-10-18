@@ -46,7 +46,7 @@ export class EventService {
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'published', ?, ?, datetime('now'), datetime('now'))
     `);
 
-    insertEvent.run(
+    await insertEvent.run(
       eventId,
       guild.id,
       input.title,
@@ -129,20 +129,20 @@ export class EventService {
    * Inscription d'un membre à un événement avec attribution automatique du rôle
    */
   static async registerParticipant(guild: Guild, eventId: string, userId: string): Promise<{ success: boolean; message: string }> {
-    const event = db.prepare('SELECT * FROM events WHERE id = ? AND guild_id = ?').get(eventId, guild.id) as any;
+    const event = (await db.prepare('SELECT * FROM events WHERE id = ? AND guild_id = ?').get(eventId, guild.id)) as any;
     if (!event) throw new Error('Événement introuvable.');
 
     if (event.status !== 'published') {
       throw new Error('Cet événement n\'est plus ouvert aux inscriptions.');
     }
 
-    const countRow = db.prepare('SELECT COUNT(*) as count FROM event_participants WHERE event_id = ?').get(eventId) as { count: number };
+    const countRow = (await db.prepare('SELECT COUNT(*) as count FROM event_participants WHERE event_id = ?').get(eventId)) as { count: number };
     if (event.max_participants && countRow.count >= event.max_participants) {
       throw new Error('Désolé, le nombre maximum de participants pour cet événement est atteint.');
     }
 
     try {
-      db.prepare('INSERT INTO event_participants (event_id, user_id, registered_at) VALUES (?, ?, datetime(\'now\'))')
+      await db.prepare('INSERT INTO event_participants (event_id, user_id, registered_at) VALUES (?, ?, datetime(\'now\'))')
         .run(eventId, userId);
     } catch {
       throw new Error('Vous êtes déjà inscrit à cet événement.');
@@ -162,7 +162,7 @@ export class EventService {
     const config = ConfigService.getGuildConfig(guild.id);
     const pts = config?.points?.eventParticipationPoints ?? 10;
     if (config?.points?.enabled) {
-      PointsService.addPoints(guild.id, userId, pts);
+      await PointsService.addPoints(guild.id, userId, pts);
     }
 
     return { success: true, message: 'Inscription confirmée avec succès !' };
@@ -171,8 +171,8 @@ export class EventService {
   /**
    * Retourne la liste des événements
    */
-  static getEvents(guildId: string): EventRecord[] {
-    const events = db.prepare(`
+  static async getEvents(guildId: string): Promise<EventRecord[]> {
+    const events = (await db.prepare(`
       SELECT 
         e.id,
         e.guild_id as guildId,
@@ -195,7 +195,7 @@ export class EventService {
       WHERE e.guild_id = ?
       GROUP BY e.id
       ORDER BY e.scheduled_start_time ASC
-    `).all(guildId) as unknown as EventRecord[];
+    `).all(guildId)) as unknown as EventRecord[];
 
     return events;
   }

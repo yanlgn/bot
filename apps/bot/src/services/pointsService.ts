@@ -10,7 +10,7 @@ export class PointsService {
   /**
    * Ajoute des points à un membre
    */
-  static addPoints(guildId: string, userId: string, amount: number): number {
+  static async addPoints(guildId: string, userId: string, amount: number): Promise<number> {
     if (amount <= 0) return this.getBalance(guildId, userId);
 
     try {
@@ -18,12 +18,12 @@ export class PointsService {
         INSERT INTO points (guild_id, user_id, balance, updated_at)
         VALUES (?, ?, ?, datetime('now'))
         ON CONFLICT(guild_id, user_id) DO UPDATE SET
-          balance = balance + excluded.balance,
+          balance = points.balance + excluded.balance,
           updated_at = datetime('now')
         RETURNING balance
       `);
-      const row = stmt.get(guildId, userId, amount) as unknown as { balance: number };
-      return row.balance;
+      const row = (await stmt.get(guildId, userId, amount)) as unknown as { balance: number };
+      return row ? row.balance : 0;
     } catch (error) {
       logger.error({ error, guildId, userId }, 'Erreur lors de l\'ajout de points');
       return 0;
@@ -33,23 +33,23 @@ export class PointsService {
   /**
    * Obtient le solde de points d'un membre
    */
-  static getBalance(guildId: string, userId: string): number {
-    const row = db.prepare('SELECT balance FROM points WHERE guild_id = ? AND user_id = ?')
-      .get(guildId, userId) as unknown as { balance: number } | undefined;
+  static async getBalance(guildId: string, userId: string): Promise<number> {
+    const row = (await db.prepare('SELECT balance FROM points WHERE guild_id = ? AND user_id = ?')
+      .get(guildId, userId)) as unknown as { balance: number } | undefined;
     return row ? row.balance : 0;
   }
 
   /**
    * Retourne le classement du club par points
    */
-  static getLeaderboard(guildId: string, limit: number = 20): LeaderboardEntry[] {
-    const rows = db.prepare(`
+  static async getLeaderboard(guildId: string, limit: number = 20): Promise<LeaderboardEntry[]> {
+    const rows = (await db.prepare(`
       SELECT user_id as userId, balance
       FROM points
       WHERE guild_id = ?
       ORDER BY balance DESC
       LIMIT ?
-    `).all(guildId, limit) as unknown as LeaderboardEntry[];
+    `).all(guildId, limit)) as unknown as LeaderboardEntry[];
     return rows;
   }
 }

@@ -8,7 +8,7 @@ export const data = new SlashCommandBuilder()
 export async function execute(interaction: ChatInputCommandInteraction) {
   if (!interaction.guild) return;
 
-  const leaderboard = PointsService.getLeaderboard(interaction.guild.id, 10);
+  const leaderboard = await PointsService.getLeaderboard(interaction.guild.id, 10);
 
   if (leaderboard.length === 0) {
     await interaction.reply({
@@ -18,7 +18,7 @@ export async function execute(interaction: ChatInputCommandInteraction) {
     return;
   }
 
-  const userBalance = PointsService.getBalance(interaction.guild.id, interaction.user.id);
+  const userBalance = await PointsService.getBalance(interaction.guild.id, interaction.user.id);
   const userRankIndex = leaderboard.findIndex(e => e.userId === interaction.user.id);
   const userRankStr = userRankIndex >= 0 ? `#${userRankIndex + 1}` : 'Hors Top 10';
 

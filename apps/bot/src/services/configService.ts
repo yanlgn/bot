@@ -51,11 +51,11 @@ export class ConfigService {
   /**
    * Sauvegarde une configuration avec validation Zod et backup horodaté automatique
    */
-  static saveGuildConfig(
+  static async saveGuildConfig(
     guildId: string,
     newConfig: unknown,
     operator: { id: string; username: string }
-  ): { success: boolean; config: GuildConfigFile; backupPath: string } {
+  ): Promise<{ success: boolean; config: GuildConfigFile; backupPath: string }> {
     // 1. Validation stricte avec Zod
     const validated = GuildConfigFileSchema.parse(newConfig);
 
@@ -75,7 +75,7 @@ export class ConfigService {
         INSERT INTO backups (id, guild_id, filename, filepath, created_by, created_at)
         VALUES (?, ?, ?, ?, ?, datetime('now'))
       `);
-      stmt.run(randomUUID(), guildId, backupFilename, backupPath, operator.username);
+      await stmt.run(randomUUID(), guildId, backupFilename, backupPath, operator.username);
     }
 
     // 3. Écriture atomique ou formatée
@@ -90,7 +90,7 @@ export class ConfigService {
         version = version + 1,
         updated_at = datetime('now')
     `);
-    updateStmt.run(guildId, JSON.stringify(validated));
+    await updateStmt.run(guildId, JSON.stringify(validated));
 
     // 5. Audit Log
     AuditLogService.record({
@@ -113,28 +113,28 @@ export class ConfigService {
   /**
    * Liste les sauvegardes disponibles pour un serveur
    */
-  static listBackups(guildId: string): Array<{ id: string; filename: string; createdAt: string; createdBy: string }> {
+  static async listBackups(guildId: string): Promise<Array<{ id: string; filename: string; createdAt: string; createdBy: string }>> {
     const stmt = db.prepare(`
       SELECT id, filename, created_at as createdAt, created_by as createdBy
       FROM backups
       WHERE guild_id = ?
       ORDER BY created_at DESC
     `);
-    return stmt.all(guildId) as Array<{ id: string; filename: string; createdAt: string; createdBy: string }>;
+    return (await stmt.all(guildId)) as Array<{ id: string; filename: string; createdAt: string; createdBy: string }>;
   }
 
   /**
    * Restaure une configuration depuis une sauvegarde
    */
-  static restoreBackup(
+  static async restoreBackup(
     guildId: string,
     backupId: string,
     operator: { id: string; username: string }
-  ): GuildConfigFile {
+  ): Promise<GuildConfigFile> {
     const stmt = db.prepare(`
       SELECT filepath FROM backups WHERE id = ? AND guild_id = ?
     `);
-    const record = stmt.get(backupId, guildId) as { filepath: string } | undefined;
+    const record = (await stmt.get(backupId, guildId)) as { filepath: string } | undefined;
 
     if (!record || !fs.existsSync(record.filepath)) {
       throw new Error(`Fichier de sauvegarde introuvable (ID: ${backupId})`);

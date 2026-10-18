@@ -8,13 +8,13 @@ import { randomUUID } from 'crypto';
 
 export const resourcesRouter = Router({ mergeParams: true });
 
-resourcesRouter.get('/', requireAuth, requireGuildAdmin, (req: Request, res: Response) => {
-  const resources = db.prepare(`
+resourcesRouter.get('/', requireAuth, requireGuildAdmin, async (req: Request, res: Response) => {
+  const resources = (await db.prepare(`
     SELECT id, guild_id as guildId, title, description, url, category, tags, author_id as authorId, created_at as createdAt
     FROM resources
     WHERE guild_id = ?
     ORDER BY created_at DESC
-  `).all(req.params.guildId) as any[];
+  `).all(req.params.guildId)) as any[];
 
   const list = resources.map(r => ({
     ...r,
@@ -24,11 +24,11 @@ resourcesRouter.get('/', requireAuth, requireGuildAdmin, (req: Request, res: Res
   res.json({ success: true, data: list });
 });
 
-resourcesRouter.post('/', requireAuth, requireGuildAdmin, validateBody(CreateResourceSchema), (req: Request, res: Response) => {
+resourcesRouter.post('/', requireAuth, requireGuildAdmin, validateBody(CreateResourceSchema), async (req: Request, res: Response) => {
   const resourceId = randomUUID();
   const user = req.session.user!;
 
-  db.prepare(`
+  await db.prepare(`
     INSERT INTO resources (id, guild_id, title, description, url, category, tags, author_id, created_at)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
   `).run(

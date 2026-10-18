@@ -16,9 +16,7 @@ import {
   Lightbulb,
   Sparkles,
   RefreshCw,
-  ExternalLink,
-  Send,
-  MessageSquare
+  Send
 } from 'lucide-react';
 import { Modal } from '../components/common/Modal';
 import { ConfirmDialog } from '../components/common/ConfirmDialog';
@@ -104,7 +102,7 @@ export const DepartmentsPage: React.FC = () => {
   });
 
   // Fetch Members & Pending for selected department
-  const { data: deptMembers = [], isLoading: isLoadingMembers } = useQuery<DepartmentMember[]>({
+  const { data: deptMembers = [] } = useQuery<DepartmentMember[]>({
     queryKey: ['dept-members', guildId, selectedDeptForMembers?.id],
     queryFn: () => apiFetch(`/guilds/${guildId}/departments/${selectedDeptForMembers?.id}/members`),
     enabled: !!guildId && !!selectedDeptForMembers
@@ -872,10 +870,9 @@ export const DepartmentsPage: React.FC = () => {
           title={`Archiver le pôle "${deletingDept.name}" ?`}
           message="Conformément à la politique de sécurité CORTEX, les salons Discord seront conservés et déplacés dans la catégorie '🗄️ ARCHIVES CORTEX' en lecture seule. Les messages et historiques ne seront pas perdus."
           confirmLabel="Archiver le pôle"
-          confirmVariant="danger"
-          isLoading={deleteMutation.isPending}
+          danger={true}
           onConfirm={() => deleteMutation.mutate(deletingDept.id)}
-          onCancel={() => setDeletingDept(null)}
+          onClose={() => setDeletingDept(null)}
         />
       )}
     </div>
