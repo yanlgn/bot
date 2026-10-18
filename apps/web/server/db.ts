@@ -1,7 +1,7 @@
 import dotenv from 'dotenv';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { createDatabaseAdapter, createNeonPool } from '@sciclub/shared';
+import { createDatabaseAdapter, createNeonPool } from '@sciclub/shared/database';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);

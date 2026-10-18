@@ -10,6 +10,11 @@
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js",
       "default": "./dist/index.js"
+    },
+    "./database": {
+      "types": "./dist/database/neon.d.ts",
+      "import": "./dist/database/neon.js",
+      "default": "./dist/database/neon.js"
     }
   },
   "scripts": {
