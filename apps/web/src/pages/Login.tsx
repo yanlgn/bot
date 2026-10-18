@@ -1,7 +1,19 @@
 import React from 'react';
-import { ShieldCheck, Cpu, Sparkles, Atom } from 'lucide-react';
+import { useSearchParams } from 'react-router-dom';
+import { ShieldCheck, Cpu, Sparkles, Atom, AlertCircle } from 'lucide-react';
 
 export const Login: React.FC = () => {
+  const [searchParams] = useSearchParams();
+  const error = searchParams.get('error');
+
+  const errorMessages: Record<string, string> = {
+    invalid_state: 'La session d\'authentification a expiré. Veuillez réessayer.',
+    token_exchange_failed: 'Erreur lors de l\'échange de token avec Discord. Vérifiez DISCORD_CLIENT_SECRET.',
+    user_fetch_failed: 'Impossible de récupérer votre profil Discord.',
+    session_save_failed: 'Erreur lors de l\'enregistrement de votre session.',
+    server_error: 'Une erreur interne est survenue. Veuillez réessayer.'
+  };
+
   const handleLogin = () => {
     window.location.href = '/api/auth/login';
   };
@@ -27,6 +39,15 @@ export const Login: React.FC = () => {
             SCIENTIFIC CLUB
           </p>
         </div>
+
+        {error && (
+          <div className="mb-6 p-3.5 bg-rose-950/40 border border-rose-800/80 rounded-xl text-left flex items-start space-x-2.5">
+            <AlertCircle className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
+            <p className="text-xs text-rose-300 font-medium">
+              {errorMessages[error] || `Erreur de connexion : ${error}`}
+            </p>
+          </div>
+        )}
 
         <p className="text-gray-400 text-xs sm:text-sm mb-8 leading-relaxed">
           Plateforme d'administration et de gestion intelligente du club scientifique et de son écosystème Discord.

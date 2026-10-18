@@ -41,7 +41,7 @@ app.use(cookieParser());
 
 // Sessions sécurisées
 app.use(session({
-  name: 'sciclub_session',
+  name: 'cortex_session',
   secret: process.env.SESSION_SECRET || 'sciclub_secret_key_long_and_complex_12345',
   resave: false,
   saveUninitialized: false,
@@ -49,7 +49,7 @@ app.use(session({
     httpOnly: true,
     secure: isProduction,
     sameSite: 'lax',
-    maxAge: 24 * 60 * 60 * 1000 // 24 heures
+    maxAge: 7 * 24 * 60 * 60 * 1000 // 7 jours
   }
 }));
 

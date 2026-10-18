@@ -41,7 +41,12 @@ authRouter.get('/login', (req: Request, res: Response) => {
   const scope = encodeURIComponent('identify guilds');
   const authUrl = `https://discord.com/api/oauth2/authorize?client_id=${clientId}&redirect_uri=${redirectUri}&response_type=code&scope=${scope}&state=${state}`;
 
-  res.redirect(authUrl);
+  req.session.save((err) => {
+    if (err) {
+      logger.error({ err }, 'Erreur lors de la sauvegarde de session login');
+    }
+    res.redirect(authUrl);
+  });
 });
 
 /**
@@ -53,12 +58,20 @@ authRouter.get('/callback', async (req: Request, res: Response) => {
   const frontendUrl = getFrontendUrl(req);
   const redirectUri = getRedirectUri(req);
 
-  if (!code || !state || state !== req.session.oauthState) {
-    logger.warn('Échec de la validation de l\'état OAuth2 (CSRF détecté ou état invalide)');
+  if (!code) {
+    logger.warn('Aucun code OAuth2 fourni dans le callback');
+    return res.redirect(`${frontendUrl}/login?error=no_code`);
+  }
+
+  // Vérification de sécurité du state si présent en session
+  if (req.session?.oauthState && state && req.session.oauthState !== state) {
+    logger.warn({ expected: req.session.oauthState, received: state }, 'Incohérence du state OAuth2');
     return res.redirect(`${frontendUrl}/login?error=invalid_state`);
   }
 
-  delete req.session.oauthState;
+  if (req.session) {
+    delete req.session.oauthState;
+  }
 
   try {
     const params = new URLSearchParams({
@@ -78,7 +91,7 @@ authRouter.get('/callback', async (req: Request, res: Response) => {
 
     if (!tokenRes.ok) {
       const errText = await tokenRes.text();
-      logger.error({ errText }, 'Erreur échange token Discord');
+      logger.error({ errText, redirectUri }, 'Erreur échange token Discord');
       return res.redirect(`${frontendUrl}/login?error=token_exchange_failed`);
     }
 
@@ -100,7 +113,7 @@ authRouter.get('/callback', async (req: Request, res: Response) => {
       avatar: string | null;
     };
 
-    // 3. Sauvegarde dans la session serveur uniquement
+    // 3. Sauvegarde dans la session serveur uniquement avec confirmation explicite
     req.session.user = {
       id: userData.id,
       username: userData.username,
@@ -109,8 +122,15 @@ authRouter.get('/callback', async (req: Request, res: Response) => {
       accessToken: tokenData.access_token
     };
 
-    logger.info({ user: userData.username }, 'Utilisateur authentifié avec succès via Discord OAuth2');
-    res.redirect(`${frontendUrl}/guilds`);
+    req.session.save((err) => {
+      if (err) {
+        logger.error({ err }, 'Erreur lors de la persistance de session utilisateur');
+        return res.redirect(`${frontendUrl}/login?error=session_save_failed`);
+      }
+
+      logger.info({ user: userData.username }, 'Utilisateur authentifié avec succès via Discord OAuth2');
+      res.redirect(`${frontendUrl}/guilds`);
+    });
   } catch (error) {
     logger.error({ error }, 'Erreur lors du callback OAuth2');
     res.redirect(`${frontendUrl}/login?error=server_error`);
@@ -127,6 +147,7 @@ authRouter.post('/logout', (req: Request, res: Response) => {
       return res.status(500).json({ success: false, error: 'Impossible de détruire la session' });
     }
     res.clearCookie('sciclub_session');
+    res.clearCookie('cortex_session');
     res.json({ success: true, message: 'Déconnexion réussie.' });
   });
 });
