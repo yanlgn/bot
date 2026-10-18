@@ -3,19 +3,22 @@
   "locale": "fr",
   "timezone": "Europe/Paris",
   "club": {
-    "name": "Cortex Scientific Club",
-    "description": "Club scientifique d'excellence dédié à l'intelligence artificielle, la robotique, l'astronomie et l'innovation technologique.",
+    "name": "CORTEX Scientific Club",
+    "description": "Club scientifique d'excellence axé sur l'intelligence artificielle, l'informatique, les sciences et l'innovation technologique.",
     "logoUrl": ""
   },
+  "departments": [],
   "roles": {
     "admin": {
       "name": "Admin Cortex",
       "color": "#E5092E",
-      "permissions": ["Administrator"],
+      "permissions": [
+        "Administrator"
+      ],
       "protected": true
     },
     "moderator": {
-      "name": "Modérateur Club",
+      "name": "Modérateur Cortex",
       "color": "#F59E0B",
       "permissions": [
         "ManageMessages",
@@ -27,7 +30,7 @@
       "protected": true
     },
     "mentor": {
-      "name": "Enseignant / Mentor",
+      "name": "Mentor / Responsable",
       "color": "#8B5CF6",
       "permissions": [
         "ViewChannel",
@@ -38,7 +41,7 @@
       "protected": false
     },
     "member": {
-      "name": "Membre Scientifique",
+      "name": "Membre Cortex",
       "color": "#22C55E",
       "permissions": [
         "ViewChannel",
@@ -47,17 +50,6 @@
         "AddReactions",
         "AttachFiles",
         "EmbedLinks"
-      ],
-      "protected": false
-    },
-    "projectLeader": {
-      "name": "Chef de Projet",
-      "color": "#06B6D4",
-      "permissions": [
-        "ViewChannel",
-        "SendMessages",
-        "ReadMessageHistory",
-        "ManageThreads"
       ],
       "protected": false
     },
@@ -74,27 +66,23 @@
   "categories": [
     {
       "key": "accueil",
-      "name": "🌟 Accueil & Infos"
+      "name": "🔴 CORTEX | ACCUEIL"
     },
     {
-      "key": "sciences",
-      "name": "🔬 Pôles Scientifiques"
+      "key": "club",
+      "name": "💬 CORTEX | COMMUNAUTÉ"
     },
     {
       "key": "projets",
-      "name": "🚀 Projets & Hackathons"
+      "name": "🚀 CORTEX | PROJETS & RECHERCHE"
     },
     {
       "key": "evenements",
-      "name": "📅 Événements & Ateliers"
-    },
-    {
-      "key": "ressources",
-      "name": "📚 Ressources & Veille"
+      "name": "📅 CORTEX | ÉVÉNEMENTS"
     },
     {
       "key": "administration",
-      "name": "⚙️ Administration"
+      "name": "⚙️ CORTEX | ADMINISTRATION"
     }
   ],
   "channels": {
@@ -102,56 +90,77 @@
       "name": "bienvenue",
       "type": "text",
       "categoryKey": "accueil",
-      "topic": "Bienvenue au SciClub ! Présente-toi et découvre nos activités.",
+      "topic": "Bienvenue au CORTEX Scientific Club ! Présente-toi et prends tes rôles.",
       "readonlyForMembers": false
     },
     "announcements": {
       "name": "annonces-officielles",
       "type": "text",
       "categoryKey": "accueil",
-      "topic": "Annonces officielles du club scientifique.",
+      "topic": "Communications et annonces importantes du club CORTEX.",
       "readonlyForMembers": true
     },
-    "ia_robotique": {
-      "name": "ia-et-robotique",
+    "rules": {
+      "name": "reglement-et-charte",
       "type": "text",
-      "categoryKey": "sciences",
-      "topic": "Discussions autour de l'IA, des réseaux de neurones, ROS et Arduino.",
+      "categoryKey": "accueil",
+      "topic": "Charte éthique et règles de vie du serveur CORTEX.",
+      "readonlyForMembers": true
+    },
+    "general": {
+      "name": "general-sciences",
+      "type": "text",
+      "categoryKey": "club",
+      "topic": "Discussions générales, science, technologie et vie du club.",
       "readonlyForMembers": false
     },
-    "astronomie": {
-      "name": "astronomie-et-espace",
+    "idees": {
+      "name": "idees-et-debats",
       "type": "text",
-      "categoryKey": "sciences",
-      "topic": "Observations célestes, astrophysique et missions spatiales.",
+      "categoryKey": "club",
+      "topic": "Partage d'idées novatrices, propositions et débats scientifiques.",
       "readonlyForMembers": false
     },
-    "general_projects": {
-      "name": "projets-collaboratifs",
+    "projets": {
+      "name": "projets-en-cours",
       "type": "text",
       "categoryKey": "projets",
-      "topic": "Échange d'idées, recherche de coéquipiers et suivi de projets.",
+      "topic": "Coordination, collaboration et suivi des projets du club.",
+      "readonlyForMembers": false
+    },
+    "hackathons": {
+      "name": "hackathons-et-challenges",
+      "type": "text",
+      "categoryKey": "projets",
+      "topic": "Organisation d'équipes pour hackathons, compétitions et CTFs.",
       "readonlyForMembers": false
     },
     "events": {
-      "name": "planning-evenements",
+      "name": "planning-ateliers",
       "type": "text",
       "categoryKey": "evenements",
-      "topic": "Conférences, workshops et concours du club.",
+      "topic": "Dates et programmes des conférences, workshops et ateliers pratiques.",
       "readonlyForMembers": true
     },
-    "resources": {
-      "name": "bibliotheque-ressources",
+    "debrief": {
+      "name": "retours-evenements",
       "type": "text",
-      "categoryKey": "ressources",
-      "topic": "Liens, papiers de recherche, MOOCs et tutoriels partagés.",
+      "categoryKey": "evenements",
+      "topic": "Photos, replays et impressions suite aux événements passés.",
       "readonlyForMembers": false
     },
     "logs": {
-      "name": "logs-administration",
+      "name": "logs-bot-securite",
       "type": "text",
       "categoryKey": "administration",
-      "topic": "Journal des actions du bot et de la modération.",
+      "topic": "Historique des alertes de modération et actions système.",
+      "readonlyForMembers": true
+    },
+    "admin_discussion": {
+      "name": "staff-cortex",
+      "type": "text",
+      "categoryKey": "administration",
+      "topic": "Salon privé réservé aux administrateurs et modérateurs.",
       "readonlyForMembers": true
     }
   },
@@ -189,6 +198,44 @@
       ]
     },
     {
+      "channelKey": "rules",
+      "overwrites": [
+        {
+          "targetKey": "role:member",
+          "permissions": {
+            "ViewChannel": "ALLOW",
+            "ReadMessageHistory": "ALLOW",
+            "SendMessages": "DENY",
+            "AddReactions": "ALLOW"
+          }
+        },
+        {
+          "targetKey": "role:guest",
+          "permissions": {
+            "ViewChannel": "ALLOW",
+            "ReadMessageHistory": "ALLOW",
+            "SendMessages": "DENY"
+          }
+        },
+        {
+          "targetKey": "role:moderator",
+          "permissions": {
+            "ViewChannel": "ALLOW",
+            "ReadMessageHistory": "ALLOW",
+            "SendMessages": "ALLOW"
+          }
+        },
+        {
+          "targetKey": "role:admin",
+          "permissions": {
+            "ViewChannel": "ALLOW",
+            "ReadMessageHistory": "ALLOW",
+            "SendMessages": "ALLOW"
+          }
+        }
+      ]
+    },
+    {
       "channelKey": "logs",
       "overwrites": [
         {
@@ -220,6 +267,39 @@
           }
         }
       ]
+    },
+    {
+      "channelKey": "admin_discussion",
+      "overwrites": [
+        {
+          "targetKey": "role:member",
+          "permissions": {
+            "ViewChannel": "DENY"
+          }
+        },
+        {
+          "targetKey": "role:guest",
+          "permissions": {
+            "ViewChannel": "DENY"
+          }
+        },
+        {
+          "targetKey": "role:moderator",
+          "permissions": {
+            "ViewChannel": "ALLOW",
+            "ReadMessageHistory": "ALLOW",
+            "SendMessages": "ALLOW"
+          }
+        },
+        {
+          "targetKey": "role:admin",
+          "permissions": {
+            "ViewChannel": "ALLOW",
+            "ReadMessageHistory": "ALLOW",
+            "SendMessages": "ALLOW"
+          }
+        }
+      ]
     }
   ],
   "moderation": {
@@ -232,7 +312,7 @@
     "enabled": true,
     "messagePoints": 1,
     "eventParticipationPoints": 10,
-    "projectCreationPoints": 20,
+    "projectCreationPoints": 25,
     "resourceSharingPoints": 5
   }
 }

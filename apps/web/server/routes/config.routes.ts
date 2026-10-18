@@ -1,7 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { requireAuth } from '../middleware/auth.js';
 import { requireGuildAdmin } from '../middleware/permissions.js';
-import { GuildConfigFileSchema, hexToDecimalColor, sanitizeChannelName } from '@sciclub/shared';
+import { GuildConfigFileSchema, hexToDecimalColor, sanitizeChannelName, getDefaultCortexConfig } from '@sciclub/shared';
 import fs from 'fs';
 import path from 'path';
 import { randomUUID } from 'crypto';
@@ -29,7 +29,22 @@ configRouter.get('/', requireAuth, requireGuildAdmin, (req: Request, res: Respon
   const { filepath } = getConfigPaths(req.params.guildId);
 
   if (!fs.existsSync(filepath)) {
-    return res.status(404).json({ success: false, error: 'Fichier de configuration inexistant pour ce serveur.' });
+    try {
+      const defaultConfig = getDefaultCortexConfig(req.params.guildId);
+      fs.writeFileSync(filepath, JSON.stringify(defaultConfig, null, 2), 'utf8');
+
+      db.prepare(`
+        INSERT INTO guild_configs (guild_id, config_json, updated_at)
+        VALUES (?, ?, datetime('now'))
+        ON CONFLICT(guild_id) DO UPDATE SET
+          config_json = excluded.config_json,
+          updated_at = datetime('now')
+      `).run(req.params.guildId, JSON.stringify(defaultConfig));
+
+      return res.json({ success: true, data: defaultConfig, initialized: true });
+    } catch (err: any) {
+      return res.status(500).json({ success: false, error: `Erreur d'initialisation de la configuration : ${err.message}` });
+    }
   }
 
   try {
