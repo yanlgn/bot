@@ -1,6 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import { GuildConfigFile, DepartmentConfigItem } from '@sciclub/shared';
+import { db } from '../db.js';
 
 export function getGuildConfigFilepath(guildId: string): string {
   const configDir = path.resolve(process.cwd(), process.env.CONFIG_PATH || './config/guilds');
@@ -12,18 +13,41 @@ export function getGuildConfigFilepath(guildId: string): string {
 
 export function readGuildConfig(guildId: string): GuildConfigFile | null {
   const filepath = getGuildConfigFilepath(guildId);
-  if (!fs.existsSync(filepath)) return null;
-  try {
-    const raw = fs.readFileSync(filepath, 'utf8');
-    return JSON.parse(raw) as GuildConfigFile;
-  } catch {
-    return null;
+  if (fs.existsSync(filepath)) {
+    try {
+      const raw = fs.readFileSync(filepath, 'utf8');
+      return JSON.parse(raw) as GuildConfigFile;
+    } catch {}
   }
+
+  // Si fichier absent sur disque (ex: redémarrage Render), restaurer depuis la base de données
+  try {
+    const row = db.prepare('SELECT config_json FROM guild_configs WHERE guild_id = ?').get(guildId) as any;
+    if (row && row.config_json) {
+      const parsed = JSON.parse(row.config_json) as GuildConfigFile;
+      fs.writeFileSync(filepath, JSON.stringify(parsed, null, 2), 'utf8');
+      return parsed;
+    }
+  } catch {}
+
+  return null;
 }
 
 export function writeGuildConfig(guildId: string, config: GuildConfigFile): void {
   const filepath = getGuildConfigFilepath(guildId);
   fs.writeFileSync(filepath, JSON.stringify(config, null, 2), 'utf8');
+
+  // Synchronisation continue dans Neon DB
+  try {
+    db.prepare(`
+      INSERT INTO guild_configs (guild_id, config_json, updated_at)
+      VALUES (?, ?, datetime('now'))
+      ON CONFLICT(guild_id) DO UPDATE SET
+        config_json = excluded.config_json,
+        version = version + 1,
+        updated_at = datetime('now')
+    `).run(guildId, JSON.stringify(config));
+  } catch {}
 }
 
 /**

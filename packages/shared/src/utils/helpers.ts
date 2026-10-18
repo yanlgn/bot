@@ -21,10 +21,24 @@ export function sanitizeChannelName(name: string): string {
   return name
     .toLowerCase()
     .trim()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
     .replace(/[^\w\s-]/g, '')
     .replace(/[\s_-]+/g, '-')
     .replace(/^-+|-+$/g, '')
     .slice(0, 100);
+}
+
+/**
+ * Normalisation stricte pour comparaison (ignore tirets, espaces, emojis et accents)
+ * Permet d'éviter les faux positifs lors de la synchronisation de salons
+ */
+export function normalizeDiscordName(name: string): string {
+  return name
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9]/g, '');
 }
 
 /**

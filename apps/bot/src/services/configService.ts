@@ -34,6 +34,14 @@ export class ConfigService {
   static getGuildConfig(guildId: string): GuildConfigFile | null {
     const filepath = this.getGuildConfigFilepath(guildId);
     if (!fs.existsSync(filepath)) {
+      try {
+        const row = db.prepare('SELECT config_json FROM guild_configs WHERE guild_id = ?').get(guildId) as any;
+        if (row && row.config_json) {
+          const parsed = GuildConfigFileSchema.parse(JSON.parse(row.config_json));
+          fs.writeFileSync(filepath, JSON.stringify(parsed, null, 2), 'utf8');
+          return parsed;
+        }
+      } catch {}
       return null;
     }
 

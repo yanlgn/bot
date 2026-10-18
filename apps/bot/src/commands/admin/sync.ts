@@ -3,7 +3,7 @@ import { ConfigService } from '../../services/configService.js';
 import { RoleService } from '../../services/roleService.js';
 import { ChannelService } from '../../services/channelService.js';
 import { PermissionService } from '../../services/permissionService.js';
-import { hexToDecimalColor } from '@sciclub/shared';
+import { hexToDecimalColor, normalizeDiscordName, sanitizeChannelName } from '@sciclub/shared';
 
 export const data = new SlashCommandBuilder()
   .setName('sync')
@@ -25,6 +25,7 @@ export async function execute(interaction: ChatInputCommandInteraction) {
 
   const operatorMember = await interaction.guild.members.fetch(interaction.user.id);
   const operator = { id: interaction.user.id, username: interaction.user.username, member: operatorMember };
+  const botMember = await interaction.guild.members.fetchMe();
 
   const logs: string[] = [];
 
@@ -35,7 +36,13 @@ export async function execute(interaction: ChatInputCommandInteraction) {
     const categoryKeyToId = new Map<string, string>();
 
     for (const cat of config.categories) {
-      let found = existingCategories.find(c => c && c.name.toLowerCase() === cat.name.toLowerCase()) as CategoryChannel | undefined;
+      let found = existingCategories.find(c => 
+        c && (
+          c.name.toLowerCase() === cat.name.toLowerCase() ||
+          normalizeDiscordName(c.name) === normalizeDiscordName(cat.name)
+        )
+      ) as CategoryChannel | undefined;
+
       if (!found) {
         found = await interaction.guild.channels.create({
           name: cat.name,
@@ -43,6 +50,7 @@ export async function execute(interaction: ChatInputCommandInteraction) {
           reason: 'CORTEX Sync : Création de la catégorie configurée'
         });
         logs.push(`📁 Catégorie : "${cat.name}" créée`);
+        existingChannels.set(found.id, found);
       }
       categoryKeyToId.set(cat.key, found.id);
     }
@@ -52,7 +60,11 @@ export async function execute(interaction: ChatInputCommandInteraction) {
     const roleKeyToId = new Map<string, string>();
 
     for (const [key, roleDef] of Object.entries(config.roles)) {
-      let found = existingRoles.find(r => r.name.toLowerCase() === roleDef.name.toLowerCase());
+      let found = existingRoles.find(r => 
+        r.name.toLowerCase() === roleDef.name.toLowerCase() ||
+        normalizeDiscordName(r.name) === normalizeDiscordName(roleDef.name)
+      );
+
       if (!found) {
         found = await RoleService.createRole(
           interaction.guild,
@@ -75,14 +87,26 @@ export async function execute(interaction: ChatInputCommandInteraction) {
     const channelKeyToId = new Map<string, string>();
 
     for (const [key, chDef] of Object.entries(config.channels)) {
-      const found = currentChannels.find(c => c && c.name.toLowerCase() === chDef.name.toLowerCase());
+      const targetNorm = normalizeDiscordName(chDef.name);
       const parentId = chDef.categoryKey ? categoryKeyToId.get(chDef.categoryKey) || null : null;
+
+      const found = currentChannels.find(c =>
+        c && (
+          c.name.toLowerCase() === chDef.name.toLowerCase() ||
+          normalizeDiscordName(c.name) === targetNorm
+        ) && (parentId ? c.parentId === parentId : true)
+      ) || currentChannels.find(c =>
+        c && (
+          c.name.toLowerCase() === chDef.name.toLowerCase() ||
+          normalizeDiscordName(c.name) === targetNorm
+        )
+      );
 
       if (!found) {
         const created = await ChannelService.createChannel(
           interaction.guild,
           {
-            name: chDef.name,
+            name: chDef.type === 'voice' ? chDef.name : sanitizeChannelName(chDef.name),
             type: chDef.type,
             parentId,
             topic: chDef.topic,
@@ -92,6 +116,7 @@ export async function execute(interaction: ChatInputCommandInteraction) {
           operator
         );
         logs.push(`💬 Salon : #${chDef.name} créé`);
+        currentChannels.set(created.id, created as any);
         channelKeyToId.set(key, created.id);
       } else {
         channelKeyToId.set(key, found.id);
@@ -104,23 +129,35 @@ export async function execute(interaction: ChatInputCommandInteraction) {
         let catId = dept.categoryId;
         const catName = dept.categoryName || `${dept.icon || '🔬'} PÔLE ${dept.name.toUpperCase()}`;
 
-        if (!catId) {
-          let foundCat = existingCategories.find(c => c && c.name.toLowerCase() === catName.toLowerCase());
-          if (!foundCat) {
-            foundCat = await interaction.guild.channels.create({
-              name: catName,
-              type: ChannelType.GuildCategory,
-              reason: `CORTEX Sync : Pôle ${dept.name}`
-            });
-            logs.push(`🔬 Pôle Catégorie : "${catName}" créée`);
-          }
-          catId = foundCat.id;
-          dept.categoryId = catId;
+        let foundCat = null;
+        if (catId) {
+          foundCat = currentChannels.find(c => c && c.id === catId && c.type === ChannelType.GuildCategory);
+        }
+        if (!foundCat) {
+          foundCat = existingCategories.find(c =>
+            c && (
+              c.name.toLowerCase() === catName.toLowerCase() ||
+              normalizeDiscordName(c.name) === normalizeDiscordName(catName)
+            )
+          );
         }
 
+        if (!foundCat) {
+          foundCat = await interaction.guild.channels.create({
+            name: catName,
+            type: ChannelType.GuildCategory,
+            reason: `CORTEX Sync : Pôle ${dept.name}`
+          });
+          logs.push(`🔬 Pôle Catégorie : "${catName}" créée`);
+          currentChannels.set(foundCat.id, foundCat);
+        }
+        catId = foundCat.id;
+        dept.categoryId = catId;
+
+        // Rôle Chef
         if (!dept.leaderRoleId) {
           const leaderName = `Chef Pôle ${dept.shortName || dept.name}`;
-          let foundLeader = existingRoles.find(r => r.name.toLowerCase() === leaderName.toLowerCase());
+          let foundLeader = existingRoles.find(r => r.name.toLowerCase() === leaderName.toLowerCase() || normalizeDiscordName(r.name) === normalizeDiscordName(leaderName));
           if (!foundLeader) {
             foundLeader = await interaction.guild.roles.create({
               name: leaderName,
@@ -134,9 +171,27 @@ export async function execute(interaction: ChatInputCommandInteraction) {
           dept.leaderRoleId = foundLeader.id;
         }
 
+        // Rôle Adjoint
+        if (!dept.deputyRoleId) {
+          const deputyName = `Adjoint Pôle ${dept.shortName || dept.name}`;
+          let foundDeputy = existingRoles.find(r => r.name.toLowerCase() === deputyName.toLowerCase() || normalizeDiscordName(r.name) === normalizeDiscordName(deputyName));
+          if (!foundDeputy) {
+            foundDeputy = await interaction.guild.roles.create({
+              name: deputyName,
+              color: hexToDecimalColor(dept.color || '#E5092E'),
+              hoist: true,
+              mentionable: true,
+              reason: `CORTEX Sync : Adjoint pôle ${dept.name}`
+            });
+            logs.push(`🥈 Rôle Adjoint : "${deputyName}" créé`);
+          }
+          dept.deputyRoleId = foundDeputy.id;
+        }
+
+        // Rôle Membre
         if (!dept.memberRoleId) {
           const memberName = `Membre ${dept.shortName || dept.name}`;
-          let foundMember = existingRoles.find(r => r.name.toLowerCase() === memberName.toLowerCase());
+          let foundMember = existingRoles.find(r => r.name.toLowerCase() === memberName.toLowerCase() || normalizeDiscordName(r.name) === normalizeDiscordName(memberName));
           if (!foundMember) {
             foundMember = await interaction.guild.roles.create({
               name: memberName,
@@ -149,6 +204,81 @@ export async function execute(interaction: ChatInputCommandInteraction) {
           }
           dept.memberRoleId = foundMember.id;
         }
+
+        // Salons de département avec déduplication stricte
+        if (dept.channels && dept.channels.length > 0) {
+          for (const ch of dept.channels) {
+            const chNorm = normalizeDiscordName(ch.name);
+
+            let foundCh = currentChannels.find(c =>
+              c && c.parentId === catId && (
+                c.name.toLowerCase() === ch.name.toLowerCase() ||
+                normalizeDiscordName(c.name) === chNorm
+              )
+            ) || currentChannels.find(c =>
+              c && (
+                c.name.toLowerCase() === ch.name.toLowerCase() ||
+                normalizeDiscordName(c.name) === chNorm
+              )
+            );
+
+            if (!foundCh) {
+              const chType = ch.type === 'voice' ? ChannelType.GuildVoice : ChannelType.GuildText;
+              const channelOverwrites: any[] = [
+                {
+                  id: botMember.id,
+                  allow: [
+                    PermissionFlagsBits.ViewChannel,
+                    PermissionFlagsBits.SendMessages,
+                    PermissionFlagsBits.EmbedLinks,
+                    PermissionFlagsBits.ReadMessageHistory
+                  ]
+                }
+              ];
+
+              if (ch.name.startsWith('candidatures-')) {
+                channelOverwrites.push(
+                  { id: interaction.guild.id, deny: [PermissionFlagsBits.ViewChannel] },
+                  ...(dept.memberRoleId ? [{ id: dept.memberRoleId, deny: [PermissionFlagsBits.ViewChannel] }] : []),
+                  ...(dept.leaderRoleId ? [{ id: dept.leaderRoleId, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ReadMessageHistory] }] : []),
+                  ...(dept.deputyRoleId ? [{ id: dept.deputyRoleId, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ReadMessageHistory] }] : [])
+                );
+              } else if (ch.readonly) {
+                channelOverwrites.push(
+                  { id: interaction.guild.id, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.ReadMessageHistory], deny: [PermissionFlagsBits.SendMessages] },
+                  ...(dept.memberRoleId ? [{ id: dept.memberRoleId, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.ReadMessageHistory, PermissionFlagsBits.AddReactions], deny: [PermissionFlagsBits.SendMessages] }] : []),
+                  ...(dept.leaderRoleId ? [{ id: dept.leaderRoleId, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.MentionEveryone] }] : []),
+                  ...(dept.deputyRoleId ? [{ id: dept.deputyRoleId, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.MentionEveryone] }] : [])
+                );
+              } else if (ch.type === 'voice') {
+                channelOverwrites.push(
+                  { id: interaction.guild.id, deny: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.Connect] },
+                  ...(dept.memberRoleId ? [{ id: dept.memberRoleId, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.Connect, PermissionFlagsBits.Speak] }] : []),
+                  ...(dept.leaderRoleId ? [{ id: dept.leaderRoleId, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.Connect, PermissionFlagsBits.Speak, PermissionFlagsBits.MuteMembers, PermissionFlagsBits.MoveMembers] }] : []),
+                  ...(dept.deputyRoleId ? [{ id: dept.deputyRoleId, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.Connect, PermissionFlagsBits.Speak, PermissionFlagsBits.MuteMembers, PermissionFlagsBits.MoveMembers] }] : [])
+                );
+              } else {
+                channelOverwrites.push(
+                  { id: interaction.guild.id, deny: [PermissionFlagsBits.ViewChannel] },
+                  ...(dept.memberRoleId ? [{ id: dept.memberRoleId, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ReadMessageHistory, PermissionFlagsBits.AddReactions, PermissionFlagsBits.AttachFiles, PermissionFlagsBits.EmbedLinks] }] : []),
+                  ...(dept.leaderRoleId ? [{ id: dept.leaderRoleId, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ReadMessageHistory, PermissionFlagsBits.ManageMessages] }] : []),
+                  ...(dept.deputyRoleId ? [{ id: dept.deputyRoleId, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ReadMessageHistory, PermissionFlagsBits.ManageMessages] }] : [])
+                );
+              }
+
+              const created = await interaction.guild.channels.create({
+                name: ch.type === 'voice' ? ch.name : sanitizeChannelName(ch.name),
+                type: chType,
+                parent: catId || undefined,
+                topic: ch.topic,
+                permissionOverwrites: channelOverwrites,
+                reason: `CORTEX Sync : Salon pôle ${dept.name}`
+              });
+              logs.push(`💬 Salon : #${created.name} créé`);
+              currentChannels.set(created.id, created as any);
+            }
+          }
+        }
       }
     }
 
@@ -159,7 +289,18 @@ export async function execute(interaction: ChatInputCommandInteraction) {
         if (!channelId) continue;
 
         for (const overwrite of rule.overwrites) {
-          const resolvedTargetId = roleKeyToId.get(overwrite.targetKey) || (overwrite.targetKey.startsWith('role:') ? null : overwrite.targetKey);
+          let resolvedTargetId = roleKeyToId.get(overwrite.targetKey);
+          if (!resolvedTargetId) {
+            if (overwrite.targetKey === 'role:everyone' || overwrite.targetKey === '@everyone') {
+              resolvedTargetId = interaction.guild.id;
+            } else if (overwrite.targetKey.startsWith('role:')) {
+              const rName = overwrite.targetKey.replace('role:', '');
+              const foundRole = existingRoles.find(r => r.name.toLowerCase() === rName.toLowerCase() || normalizeDiscordName(r.name) === normalizeDiscordName(rName));
+              if (foundRole) resolvedTargetId = foundRole.id;
+            } else {
+              resolvedTargetId = overwrite.targetKey;
+            }
+          }
           if (!resolvedTargetId) continue;
 
           await PermissionService.updateChannelPermissions(

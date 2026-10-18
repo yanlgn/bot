@@ -1,13 +1,13 @@
 import { Router, Request, Response } from 'express';
 import { requireAuth } from '../middleware/auth.js';
 import { requireGuildAdmin } from '../middleware/permissions.js';
-import { GuildConfigFileSchema, hexToDecimalColor, sanitizeChannelName, getDefaultCortexConfig } from '@sciclub/shared';
+import { GuildConfigFileSchema, hexToDecimalColor, sanitizeChannelName, normalizeDiscordName, getDefaultCortexConfig } from '@sciclub/shared';
 import fs from 'fs';
 import path from 'path';
 import { randomUUID } from 'crypto';
 import { db } from '../db.js';
 import { discordClient } from '../botClient.js';
-import { ChannelType, PermissionFlagsBits, PermissionsBitField } from 'discord.js';
+import { ChannelType, PermissionFlagsBits, PermissionsBitField, TextChannel } from 'discord.js';
 
 export const configRouter = Router({ mergeParams: true });
 
@@ -29,6 +29,17 @@ configRouter.get('/', requireAuth, requireGuildAdmin, async (req: Request, res: 
   const { filepath } = getConfigPaths(req.params.guildId);
 
   if (!fs.existsSync(filepath)) {
+    // 1. Chercher d'abord dans Neon DB si la configuration existe déjà
+    try {
+      const dbRow = (await db.prepare('SELECT config_json FROM guild_configs WHERE guild_id = ?').get(req.params.guildId)) as any;
+      if (dbRow && dbRow.config_json) {
+        const parsed = JSON.parse(dbRow.config_json);
+        fs.writeFileSync(filepath, JSON.stringify(parsed, null, 2), 'utf8');
+        return res.json({ success: true, data: parsed });
+      }
+    } catch {}
+
+    // 2. Si aucune configuration en base, initialiser avec la config par défaut
     try {
       const defaultConfig = getDefaultCortexConfig(req.params.guildId);
       fs.writeFileSync(filepath, JSON.stringify(defaultConfig, null, 2), 'utf8');
@@ -140,7 +151,16 @@ configRouter.post('/apply', requireAuth, requireGuildAdmin, async (req: Request,
 
   const { filepath } = getConfigPaths(req.params.guildId);
   if (!fs.existsSync(filepath)) {
-    return res.status(404).json({ success: false, error: 'Fichier de configuration inexistant pour ce serveur.' });
+    try {
+      const dbRow = (await db.prepare('SELECT config_json FROM guild_configs WHERE guild_id = ?').get(req.params.guildId)) as any;
+      if (dbRow && dbRow.config_json) {
+        fs.writeFileSync(filepath, dbRow.config_json, 'utf8');
+      } else {
+        return res.status(404).json({ success: false, error: 'Fichier de configuration inexistant pour ce serveur.' });
+      }
+    } catch {
+      return res.status(404).json({ success: false, error: 'Fichier de configuration inexistant pour ce serveur.' });
+    }
   }
 
   try {
@@ -203,8 +223,20 @@ configRouter.post('/apply', requireAuth, requireGuildAdmin, async (req: Request,
     const channelKeyToId = new Map<string, string>();
 
     for (const [key, chDef] of Object.entries(parsed.channels)) {
-      const found = currentChannels.find(c => c && c.name.toLowerCase() === chDef.name.toLowerCase());
+      const targetNorm = normalizeDiscordName(chDef.name);
       const parentId = chDef.categoryKey ? categoryKeyToId.get(chDef.categoryKey) || null : (chDef.categoryId || null);
+
+      const found = currentChannels.find(c =>
+        c && (
+          c.name.toLowerCase() === chDef.name.toLowerCase() ||
+          normalizeDiscordName(c.name) === targetNorm
+        ) && (parentId ? c.parentId === parentId : true)
+      ) || currentChannels.find(c =>
+        c && (
+          c.name.toLowerCase() === chDef.name.toLowerCase() ||
+          normalizeDiscordName(c.name) === targetNorm
+        )
+      );
 
       if (!found) {
         let type = ChannelType.GuildText;
@@ -212,14 +244,24 @@ configRouter.post('/apply', requireAuth, requireGuildAdmin, async (req: Request,
         else if (chDef.type === 'category') type = ChannelType.GuildCategory;
         else if (chDef.type === 'forum') type = ChannelType.GuildForum;
 
+        const overwrites: any[] = [];
+        if (chDef.readonlyForMembers) {
+          overwrites.push({
+            id: guild.id,
+            deny: [PermissionFlagsBits.SendMessages]
+          });
+        }
+
         const created = await guild.channels.create({
-          name: sanitizeChannelName(chDef.name),
+          name: chDef.type === 'voice' ? chDef.name : sanitizeChannelName(chDef.name),
           type,
           parent: parentId || undefined,
           topic: chDef.topic,
+          permissionOverwrites: overwrites.length > 0 ? overwrites : undefined,
           reason: 'Cortex Config Apply : Salon déclaré'
         });
-        logs.push(`💬 Salon créé : #${chDef.name}`);
+        logs.push(`💬 Salon créé : #${created.name}`);
+        currentChannels.set(created.id, created);
         channelKeyToId.set(key, created.id);
       } else {
         channelKeyToId.set(key, found.id);
@@ -232,23 +274,52 @@ configRouter.post('/apply', requireAuth, requireGuildAdmin, async (req: Request,
         let catId = dept.categoryId;
         const catName = dept.categoryName || `${dept.icon || '🔬'} PÔLE ${dept.name.toUpperCase()}`;
 
-        if (!catId) {
-          let foundCat = existingCategories.find(c => c && c.name.toLowerCase() === catName.toLowerCase());
-          if (!foundCat) {
-            foundCat = await guild.channels.create({
-              name: catName,
-              type: ChannelType.GuildCategory,
-              reason: `Cortex Sync : Catégorie pôle ${dept.name}`
-            });
-            logs.push(`🔬 Catégorie Pôle créée : "${catName}"`);
-          }
-          catId = foundCat.id;
-          dept.categoryId = catId;
+        let foundCat = null;
+        if (catId) {
+          foundCat = currentChannels.find(c => c && c.id === catId && c.type === ChannelType.GuildCategory);
+        }
+        if (!foundCat) {
+          foundCat = existingCategories.find(c =>
+            c && (
+              c.name.toLowerCase() === catName.toLowerCase() ||
+              normalizeDiscordName(c.name) === normalizeDiscordName(catName)
+            )
+          );
         }
 
+        if (!foundCat) {
+          const catOverwrites: any[] = [
+            {
+              id: botMember.id,
+              allow: [
+                PermissionFlagsBits.ViewChannel,
+                PermissionFlagsBits.ManageChannels,
+                PermissionFlagsBits.ManageRoles,
+                PermissionFlagsBits.SendMessages
+              ]
+            },
+            {
+              id: guild.id,
+              deny: [PermissionFlagsBits.SendMessages]
+            }
+          ];
+
+          foundCat = await guild.channels.create({
+            name: catName,
+            type: ChannelType.GuildCategory,
+            permissionOverwrites: catOverwrites,
+            reason: `Cortex Sync : Catégorie pôle ${dept.name}`
+          });
+          logs.push(`🔬 Catégorie Pôle créée : "${catName}"`);
+          currentChannels.set(foundCat.id, foundCat);
+        }
+        catId = foundCat.id;
+        dept.categoryId = catId;
+
+        // Rôle Chef
         if (!dept.leaderRoleId) {
           const leaderName = `Chef Pôle ${dept.shortName || dept.name}`;
-          let foundLeader = existingRoles.find(r => r.name.toLowerCase() === leaderName.toLowerCase());
+          let foundLeader = existingRoles.find(r => r.name.toLowerCase() === leaderName.toLowerCase() || normalizeDiscordName(r.name) === normalizeDiscordName(leaderName));
           if (!foundLeader) {
             foundLeader = await guild.roles.create({
               name: leaderName,
@@ -262,9 +333,27 @@ configRouter.post('/apply', requireAuth, requireGuildAdmin, async (req: Request,
           dept.leaderRoleId = foundLeader.id;
         }
 
+        // Rôle Adjoint
+        if (!dept.deputyRoleId) {
+          const deputyName = `Adjoint Pôle ${dept.shortName || dept.name}`;
+          let foundDeputy = existingRoles.find(r => r.name.toLowerCase() === deputyName.toLowerCase() || normalizeDiscordName(r.name) === normalizeDiscordName(deputyName));
+          if (!foundDeputy) {
+            foundDeputy = await guild.roles.create({
+              name: deputyName,
+              color: hexToDecimalColor(dept.color || '#E5092E'),
+              hoist: true,
+              mentionable: true,
+              reason: `Cortex Sync : Adjoint pôle ${dept.name}`
+            });
+            logs.push(`🥈 Rôle Adjoint créé : "${deputyName}"`);
+          }
+          dept.deputyRoleId = foundDeputy.id;
+        }
+
+        // Rôle Membre
         if (!dept.memberRoleId) {
           const memberName = `Membre ${dept.shortName || dept.name}`;
-          let foundMember = existingRoles.find(r => r.name.toLowerCase() === memberName.toLowerCase());
+          let foundMember = existingRoles.find(r => r.name.toLowerCase() === memberName.toLowerCase() || normalizeDiscordName(r.name) === normalizeDiscordName(memberName));
           if (!foundMember) {
             foundMember = await guild.roles.create({
               name: memberName,
@@ -278,29 +367,99 @@ configRouter.post('/apply', requireAuth, requireGuildAdmin, async (req: Request,
           dept.memberRoleId = foundMember.id;
         }
 
-        // Salons de département
+        // Salons de département avec déduplication stricte et permissions atomiques
         if (dept.channels && dept.channels.length > 0) {
           for (const ch of dept.channels) {
-            const chName = sanitizeChannelName(ch.name);
-            const foundCh = currentChannels.find(c => c && c.name.toLowerCase() === chName.toLowerCase());
+            const chNorm = normalizeDiscordName(ch.name);
+
+            // 1. Chercher prioritairement dans la catégorie du pôle
+            let foundCh: any = currentChannels.find(c =>
+              c && c.parentId === catId && (
+                c.name.toLowerCase() === ch.name.toLowerCase() ||
+                normalizeDiscordName(c.name) === chNorm
+              )
+            );
+
+            // 2. Si non trouvé dans la catégorie, chercher sur le reste du serveur
+            if (!foundCh) {
+              foundCh = currentChannels.find(c =>
+                c && (
+                  c.name.toLowerCase() === ch.name.toLowerCase() ||
+                  normalizeDiscordName(c.name) === chNorm
+                )
+              );
+              // Si trouvé hors catégorie, rattacher à la catégorie du pôle
+              if (foundCh && catId && foundCh.parentId !== catId) {
+                await foundCh.setParent(catId).catch(() => null);
+              }
+            }
+
             if (!foundCh) {
               const chType = ch.type === 'voice' ? ChannelType.GuildVoice : ChannelType.GuildText;
-              await guild.channels.create({
-                name: chName,
+              const channelOverwrites: any[] = [
+                {
+                  id: botMember.id,
+                  allow: [
+                    PermissionFlagsBits.ViewChannel,
+                    PermissionFlagsBits.SendMessages,
+                    PermissionFlagsBits.EmbedLinks,
+                    PermissionFlagsBits.ReadMessageHistory
+                  ]
+                }
+              ];
+
+              if (ch.name.startsWith('candidatures-')) {
+                // Strictement confidentiel : masqué pour @everyone et membres, visible uniquement par Chef, Adjoint et Bot
+                channelOverwrites.push(
+                  { id: guild.id, deny: [PermissionFlagsBits.ViewChannel] },
+                  ...(dept.memberRoleId ? [{ id: dept.memberRoleId, deny: [PermissionFlagsBits.ViewChannel] }] : []),
+                  ...(dept.leaderRoleId ? [{ id: dept.leaderRoleId, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ReadMessageHistory] }] : []),
+                  ...(dept.deputyRoleId ? [{ id: dept.deputyRoleId, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ReadMessageHistory] }] : [])
+                );
+              } else if (ch.readonly) {
+                // Annonces : lecture seule pour @everyone et membres, écriture réservée au Chef & Adjoint
+                channelOverwrites.push(
+                  { id: guild.id, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.ReadMessageHistory], deny: [PermissionFlagsBits.SendMessages] },
+                  ...(dept.memberRoleId ? [{ id: dept.memberRoleId, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.ReadMessageHistory, PermissionFlagsBits.AddReactions], deny: [PermissionFlagsBits.SendMessages] }] : []),
+                  ...(dept.leaderRoleId ? [{ id: dept.leaderRoleId, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.MentionEveryone] }] : []),
+                  ...(dept.deputyRoleId ? [{ id: dept.deputyRoleId, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.MentionEveryone] }] : [])
+                );
+              } else if (ch.type === 'voice') {
+                // Vocal d'atelier : réservé aux membres, adjoints et chefs du pôle
+                channelOverwrites.push(
+                  { id: guild.id, deny: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.Connect] },
+                  ...(dept.memberRoleId ? [{ id: dept.memberRoleId, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.Connect, PermissionFlagsBits.Speak] }] : []),
+                  ...(dept.leaderRoleId ? [{ id: dept.leaderRoleId, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.Connect, PermissionFlagsBits.Speak, PermissionFlagsBits.MuteMembers, PermissionFlagsBits.MoveMembers] }] : []),
+                  ...(dept.deputyRoleId ? [{ id: dept.deputyRoleId, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.Connect, PermissionFlagsBits.Speak, PermissionFlagsBits.MuteMembers, PermissionFlagsBits.MoveMembers] }] : [])
+                );
+              } else {
+                // Salons d'échanges et projets : réservés aux membres du pôle
+                channelOverwrites.push(
+                  { id: guild.id, deny: [PermissionFlagsBits.ViewChannel] },
+                  ...(dept.memberRoleId ? [{ id: dept.memberRoleId, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ReadMessageHistory, PermissionFlagsBits.AddReactions, PermissionFlagsBits.AttachFiles, PermissionFlagsBits.EmbedLinks] }] : []),
+                  ...(dept.leaderRoleId ? [{ id: dept.leaderRoleId, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ReadMessageHistory, PermissionFlagsBits.ManageMessages] }] : []),
+                  ...(dept.deputyRoleId ? [{ id: dept.deputyRoleId, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ReadMessageHistory, PermissionFlagsBits.ManageMessages] }] : [])
+                );
+              }
+
+              const created = await guild.channels.create({
+                name: ch.type === 'voice' ? ch.name : sanitizeChannelName(ch.name),
                 type: chType,
                 parent: catId || undefined,
                 topic: ch.topic,
+                permissionOverwrites: channelOverwrites,
                 reason: `Cortex Sync : Salon pôle ${dept.name}`
               });
-              logs.push(`💬 Salon créé : #${chName}`);
+              logs.push(`💬 Salon créé : #${created.name}`);
+              currentChannels.set(created.id, created);
             }
           }
         }
 
-        // Enregistrer en base SQL
+        // Enregistrer en base SQL Neon
         await db.prepare(`
-          INSERT INTO departments (id, guild_id, name, short_name, icon, color, description, leader_role_id, member_role_id, category_id, updated_at)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
+          INSERT INTO departments (id, guild_id, name, short_name, icon, color, description, leader_role_id, deputy_role_id, member_role_id, category_id, updated_at)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
           ON CONFLICT(id) DO UPDATE SET
             name = excluded.name,
             short_name = excluded.short_name,
@@ -308,6 +467,7 @@ configRouter.post('/apply', requireAuth, requireGuildAdmin, async (req: Request,
             color = excluded.color,
             description = excluded.description,
             leader_role_id = excluded.leader_role_id,
+            deputy_role_id = excluded.deputy_role_id,
             member_role_id = excluded.member_role_id,
             category_id = excluded.category_id,
             updated_at = datetime('now')
@@ -320,12 +480,50 @@ configRouter.post('/apply', requireAuth, requireGuildAdmin, async (req: Request,
           dept.color || '#E5092E',
           dept.description || '',
           dept.leaderRoleId || null,
+          dept.deputyRoleId || null,
           dept.memberRoleId || null,
           dept.categoryId || null
         );
       }
 
       fs.writeFileSync(filepath, JSON.stringify(parsed, null, 2), 'utf8');
+    }
+
+    // 5. Synchronisation des permissions déclaratives
+    if (parsed.channelPermissions && parsed.channelPermissions.length > 0) {
+      for (const rule of parsed.channelPermissions) {
+        const channelId = channelKeyToId.get(rule.channelKey);
+        if (!channelId) continue;
+        const targetChannel = await guild.channels.fetch(channelId).catch(() => null);
+        if (!targetChannel || !('permissionOverwrites' in targetChannel)) continue;
+
+        for (const overwrite of rule.overwrites) {
+          let resolvedTargetId = roleKeyToId.get(overwrite.targetKey);
+          if (!resolvedTargetId) {
+            if (overwrite.targetKey === 'role:everyone' || overwrite.targetKey === '@everyone') {
+              resolvedTargetId = guild.id;
+            } else if (overwrite.targetKey.startsWith('role:')) {
+              const rName = overwrite.targetKey.replace('role:', '');
+              const foundRole = existingRoles.find(r => r.name.toLowerCase() === rName.toLowerCase());
+              if (foundRole) resolvedTargetId = foundRole.id;
+            } else {
+              resolvedTargetId = overwrite.targetKey;
+            }
+          }
+          if (!resolvedTargetId) continue;
+
+          const discordOverwrites: Record<string, boolean | null> = {};
+          for (const [permFlag, state] of Object.entries(overwrite.permissions)) {
+            if (!(permFlag in PermissionFlagsBits)) continue;
+            if (state === 'ALLOW') discordOverwrites[permFlag] = true;
+            else if (state === 'DENY') discordOverwrites[permFlag] = false;
+            else discordOverwrites[permFlag] = null;
+          }
+
+          await (targetChannel as TextChannel).permissionOverwrites.edit(resolvedTargetId, discordOverwrites).catch(() => null);
+        }
+      }
+      logs.push('🔒 Permissions déclaratives appliquées aux salons');
     }
 
     res.json({

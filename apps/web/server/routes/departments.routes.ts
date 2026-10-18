@@ -165,16 +165,77 @@ departmentsRouter.post('/', requireAuth, requireGuildAdmin, validateBody(CreateD
       }
     }
 
-    // 2. Catégorie Discord
+    // 2. Catégorie Discord avec permissions atomiques
     if (body.createCategory) {
+      const categoryOverwrites: any[] = [
+        {
+          id: botMember.id,
+          allow: [
+            PermissionFlagsBits.ViewChannel,
+            PermissionFlagsBits.ManageChannels,
+            PermissionFlagsBits.ManageRoles,
+            PermissionFlagsBits.SendMessages
+          ]
+        }
+      ];
+
+      if (leaderRole) {
+        categoryOverwrites.push({
+          id: leaderRole.id,
+          allow: [
+            PermissionFlagsBits.ViewChannel,
+            PermissionFlagsBits.SendMessages,
+            PermissionFlagsBits.ReadMessageHistory,
+            PermissionFlagsBits.ManageMessages,
+            PermissionFlagsBits.Connect,
+            PermissionFlagsBits.Speak,
+            PermissionFlagsBits.MuteMembers,
+            PermissionFlagsBits.MoveMembers
+          ]
+        });
+      }
+
+      if (deputyRole) {
+        categoryOverwrites.push({
+          id: deputyRole.id,
+          allow: [
+            PermissionFlagsBits.ViewChannel,
+            PermissionFlagsBits.SendMessages,
+            PermissionFlagsBits.ReadMessageHistory,
+            PermissionFlagsBits.ManageMessages,
+            PermissionFlagsBits.Connect,
+            PermissionFlagsBits.Speak,
+            PermissionFlagsBits.MuteMembers,
+            PermissionFlagsBits.MoveMembers
+          ]
+        });
+      }
+
+      if (memberRole) {
+        categoryOverwrites.push({
+          id: memberRole.id,
+          allow: [
+            PermissionFlagsBits.ViewChannel,
+            PermissionFlagsBits.SendMessages,
+            PermissionFlagsBits.ReadMessageHistory,
+            PermissionFlagsBits.AddReactions,
+            PermissionFlagsBits.AttachFiles,
+            PermissionFlagsBits.EmbedLinks,
+            PermissionFlagsBits.Connect,
+            PermissionFlagsBits.Speak
+          ]
+        });
+      }
+
       category = await guild.channels.create({
         name: `${body.icon} PÔLE ${body.name.toUpperCase()}`,
         type: ChannelType.GuildCategory,
+        permissionOverwrites: categoryOverwrites,
         reason: `Cortex : Catégorie du pôle ${body.name}`
       });
     }
 
-    // 3. Salons dédiés
+    // 3. Salons dédiés avec permissions atomiques
     if (body.createChannels && category) {
       const channelConfigs = [
         { name: `annonces-${slug}`, type: 'text' as const, topic: `Annonces officielles du pôle ${body.name}`, readonly: true },
@@ -187,51 +248,60 @@ departmentsRouter.post('/', requireAuth, requireGuildAdmin, validateBody(CreateD
 
       for (const ch of channelConfigs) {
         const chType = ch.type === 'voice' ? ChannelType.GuildVoice : ChannelType.GuildText;
-        const createdCh = await guild.channels.create({
+        const channelOverwrites: any[] = [
+          {
+            id: botMember.id,
+            allow: [
+              PermissionFlagsBits.ViewChannel,
+              PermissionFlagsBits.SendMessages,
+              PermissionFlagsBits.EmbedLinks,
+              PermissionFlagsBits.ReadMessageHistory
+            ]
+          }
+        ];
+
+        if (ch.name.startsWith('candidatures-')) {
+          // STRICTEMENT PRIVÉ : invisible pour @everyone et membres du pôle, accessible uniquement par Chef, Adjoint et Bot
+          channelOverwrites.push(
+            { id: guild.id, deny: [PermissionFlagsBits.ViewChannel] },
+            ...(memberRole ? [{ id: memberRole.id, deny: [PermissionFlagsBits.ViewChannel] }] : []),
+            ...(leaderRole ? [{ id: leaderRole.id, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ReadMessageHistory] }] : []),
+            ...(deputyRole ? [{ id: deputyRole.id, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ReadMessageHistory] }] : [])
+          );
+        } else if (ch.readonly) {
+          // ANNONCES : visible de tous mais écriture réservée au Chef & Adjoint
+          channelOverwrites.push(
+            { id: guild.id, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.ReadMessageHistory], deny: [PermissionFlagsBits.SendMessages] },
+            ...(memberRole ? [{ id: memberRole.id, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.ReadMessageHistory, PermissionFlagsBits.AddReactions], deny: [PermissionFlagsBits.SendMessages] }] : []),
+            ...(leaderRole ? [{ id: leaderRole.id, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.MentionEveryone] }] : []),
+            ...(deputyRole ? [{ id: deputyRole.id, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.MentionEveryone] }] : [])
+          );
+        } else if (ch.type === 'voice') {
+          // VOCAL : réservé aux membres, adjoints et chefs du pôle
+          channelOverwrites.push(
+            { id: guild.id, deny: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.Connect] },
+            ...(memberRole ? [{ id: memberRole.id, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.Connect, PermissionFlagsBits.Speak] }] : []),
+            ...(leaderRole ? [{ id: leaderRole.id, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.Connect, PermissionFlagsBits.Speak, PermissionFlagsBits.MuteMembers, PermissionFlagsBits.MoveMembers] }] : []),
+            ...(deputyRole ? [{ id: deputyRole.id, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.Connect, PermissionFlagsBits.Speak, PermissionFlagsBits.MuteMembers, PermissionFlagsBits.MoveMembers] }] : [])
+          );
+        } else {
+          // GENERAL, PROJETS, RESSOURCES : salons de travail réservés aux membres du pôle
+          channelOverwrites.push(
+            { id: guild.id, deny: [PermissionFlagsBits.ViewChannel] },
+            ...(memberRole ? [{ id: memberRole.id, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ReadMessageHistory, PermissionFlagsBits.AddReactions, PermissionFlagsBits.AttachFiles, PermissionFlagsBits.EmbedLinks] }] : []),
+            ...(leaderRole ? [{ id: leaderRole.id, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ReadMessageHistory, PermissionFlagsBits.ManageMessages] }] : []),
+            ...(deputyRole ? [{ id: deputyRole.id, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ReadMessageHistory, PermissionFlagsBits.ManageMessages] }] : [])
+          );
+        }
+
+        await guild.channels.create({
           name: ch.type === 'voice' ? ch.name : sanitizeChannelName(ch.name),
           type: chType,
           parent: category.id,
           topic: ch.topic,
+          permissionOverwrites: channelOverwrites,
           reason: `Cortex : Salon pôle ${body.name}`
         });
-
-        // Salon de candidatures : privé pour le Chef, l'Adjoint et le Staff
-        if (ch.name.startsWith('candidatures-') && chType === ChannelType.GuildText) {
-          await (createdCh as TextChannel).permissionOverwrites.edit(guild.id, {
-            ViewChannel: false
-          }).catch(() => null);
-          if (leaderRole) {
-            await (createdCh as TextChannel).permissionOverwrites.edit(leaderRole.id, {
-              ViewChannel: true,
-              SendMessages: true,
-              ReadMessageHistory: true
-            }).catch(() => null);
-          }
-          if (deputyRole) {
-            await (createdCh as TextChannel).permissionOverwrites.edit(deputyRole.id, {
-              ViewChannel: true,
-              SendMessages: true,
-              ReadMessageHistory: true
-            }).catch(() => null);
-          }
-        }
-
-        // Verrouillage lecture seule pour le salon d'annonces
-        if (ch.readonly && chType === ChannelType.GuildText) {
-          await (createdCh as TextChannel).permissionOverwrites.edit(guild.id, {
-            SendMessages: false
-          }).catch(() => null);
-          if (leaderRole) {
-            await (createdCh as TextChannel).permissionOverwrites.edit(leaderRole.id, {
-              SendMessages: true
-            }).catch(() => null);
-          }
-          if (deputyRole) {
-            await (createdCh as TextChannel).permissionOverwrites.edit(deputyRole.id, {
-              SendMessages: true
-            }).catch(() => null);
-          }
-        }
 
         createdChannelsList.push(ch);
       }
