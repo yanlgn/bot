@@ -1,3 +1,4 @@
+import React, { useEffect } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { ShieldCheck, Cpu, Sparkles, Atom, AlertCircle } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
