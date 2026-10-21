@@ -202,9 +202,36 @@ CREATE TABLE IF NOT EXISTS candidatures (
   study_field TEXT NOT NULL,
   motivation TEXT NOT NULL,
   interests TEXT DEFAULT '[]',
+  availability TEXT,
   status TEXT CHECK(status IN ('pending', 'accepted', 'rejected')) DEFAULT 'pending',
+  discord_message_id TEXT,
+  review_notes TEXT,
   reviewed_by TEXT,
+  reviewed_at DATETIME,
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS candidature_configs (
+  guild_id TEXT PRIMARY KEY,
+  submission_channel_id TEXT,
+  review_channel_id TEXT,
+  panel_message_id TEXT,
+  member_role_id TEXT,
+  title TEXT,
+  description TEXT,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS candidature_panels (
+  id TEXT PRIMARY KEY,
+  guild_id TEXT NOT NULL,
+  channel_id TEXT NOT NULL,
+  message_id TEXT NOT NULL,
+  title TEXT,
+  description TEXT,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE TABLE IF NOT EXISTS warnings (

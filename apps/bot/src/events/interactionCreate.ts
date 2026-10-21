@@ -11,6 +11,11 @@ import {
   handleSuggestionModalSubmit,
   handleSuggestionStaffReview
 } from '../interactions/suggestionInteractions.js';
+import {
+  handleCandidatureButtonClick,
+  handleCandidatureModalSubmit,
+  handleCandidatureStaffReview
+} from '../interactions/candidatureInteractions.js';
 
 export const name = Events.InteractionCreate;
 export const once = false;
@@ -41,6 +46,16 @@ export async function execute(interaction: Interaction) {
 
     // 3. Boutons interactifs (candidature, suggestions ou validations staff)
     if (interaction.isButton()) {
+      if (interaction.customId === 'cortex_cand_btn') {
+        await handleCandidatureButtonClick(interaction);
+        return;
+      }
+
+      if (interaction.customId.startsWith('cortex_cand_app_') || interaction.customId.startsWith('cortex_cand_rej_')) {
+        await handleCandidatureStaffReview(interaction);
+        return;
+      }
+
       if (interaction.customId === 'cortex_suggestion_btn') {
         await handleSuggestionButtonClick(interaction);
         return;
@@ -65,6 +80,11 @@ export async function execute(interaction: Interaction) {
 
     // 4. Soumission des formulaires Modals
     if (interaction.isModalSubmit()) {
+      if (interaction.customId === 'cortex_cand_modal') {
+        await handleCandidatureModalSubmit(interaction);
+        return;
+      }
+
       if (interaction.customId === 'cortex_suggestion_modal') {
         await handleSuggestionModalSubmit(interaction);
         return;

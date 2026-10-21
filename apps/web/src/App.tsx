@@ -18,6 +18,7 @@ import { ModerationPage } from './pages/ModerationPage';
 import { ConfigEditorPage } from './pages/ConfigEditorPage';
 import { AuditLogsPage } from './pages/AuditLogsPage';
 import { DepartmentsPage } from './pages/DepartmentsPage';
+import { CandidaturesPage } from './pages/CandidaturesPage';
 import { SuggestionsPage } from './pages/SuggestionsPage';
 
 const queryClient = new QueryClient({
@@ -41,6 +42,7 @@ export const App: React.FC = () => {
             <Route path="/dashboard/:guildId" element={<DashboardLayout />}>
               <Route index element={<Overview />} />
               <Route path="departments" element={<DepartmentsPage />} />
+              <Route path="candidatures" element={<CandidaturesPage />} />
               <Route path="suggestions" element={<SuggestionsPage />} />
               <Route path="roles" element={<RolesPage />} />
               <Route path="channels" element={<ChannelsPage />} />

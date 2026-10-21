@@ -4,6 +4,7 @@ import {
   LayoutDashboard,
   Layers,
   Lightbulb,
+  UserPlus,
   Shield,
   Hash,
   KeyRound,
@@ -24,6 +25,7 @@ export const Sidebar: React.FC = () => {
   const navItems = [
     { label: 'Vue d\'ensemble', path: `/dashboard/${guildId}`, icon: LayoutDashboard },
     { label: 'Pôles Scientifiques', path: `/dashboard/${guildId}/departments`, icon: Layers },
+    { label: 'Candidatures Club', path: `/dashboard/${guildId}/candidatures`, icon: UserPlus },
     { label: 'Espace Suggestions', path: `/dashboard/${guildId}/suggestions`, icon: Lightbulb },
     { label: 'Rôles Discord', path: `/dashboard/${guildId}/roles`, icon: Shield },
     { label: 'Salons & Pôles', path: `/dashboard/${guildId}/channels`, icon: Hash },
