@@ -10,7 +10,7 @@
     "build:client": "vite build",
     "build:server": "tsc -p server/tsconfig.json",
     "build": "npm run build:client && npm run build:server",
-    "start": "node --experimental-sqlite dist-server/index.js",
+    "start": "node dist-server/index.js",
     "clean": "rimraf dist dist-server"
   },
   "dependencies": {

@@ -83,12 +83,17 @@ app.use(errorHandler);
 
 // Démarrage du serveur et du client Discord
 async function startServer() {
-  const token = process.env.DISCORD_BOT_TOKEN || process.env.DISCORD_TOKEN || '';
-  await initDiscordClient(token);
-
-  app.listen(PORT, () => {
-    logger.info(`🌐 Serveur API et Dashboard SciClub à l'écoute sur http://localhost:${PORT}`);
+  const server = app.listen(Number(PORT), '0.0.0.0', () => {
+    logger.info(`🌐 Serveur API et Dashboard SciClub à l'écoute sur http://0.0.0.0:${PORT}`);
+    
+    // Connexion asynchrone à Discord sans bloquer l'ouverture du port HTTP Render
+    const token = process.env.DISCORD_BOT_TOKEN || process.env.DISCORD_TOKEN || '';
+    initDiscordClient(token).catch(err => {
+      logger.error({ err }, 'Erreur lors de la connexion du client Discord Web :');
+    });
   });
+
+  return server;
 }
 
 startServer().catch(err => {
