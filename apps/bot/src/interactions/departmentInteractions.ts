@@ -254,9 +254,15 @@ export async function handleDepartmentStaffReview(interaction: ButtonInteraction
     ? interaction.customId.replace('cortex_dept_app_', '')
     : interaction.customId.replace('cortex_dept_rej_', '');
 
-  const parts = raw.split('_');
-  const deptId = parts[0];
-  const candidateUserId = parts.slice(1).join('_');
+  let deptId = '';
+  let candidateUserId = '';
+
+  const lastUnderscore = raw.lastIndexOf('_');
+  if (lastUnderscore !== -1) {
+    deptId = raw.substring(0, lastUnderscore);
+    candidateUserId = raw.substring(lastUnderscore + 1);
+  }
+
   if (!deptId || !candidateUserId) return;
 
   const dept = (await db.prepare('SELECT * FROM departments WHERE id = ? AND guild_id = ?').get(deptId, interaction.guild.id)) as any;
