@@ -3,6 +3,7 @@ import { NavLink } from 'react-router-dom';
 import {
   LayoutDashboard,
   Layers,
+  Lightbulb,
   Shield,
   Hash,
   KeyRound,
@@ -23,6 +24,7 @@ export const Sidebar: React.FC = () => {
   const navItems = [
     { label: 'Vue d\'ensemble', path: `/dashboard/${guildId}`, icon: LayoutDashboard },
     { label: 'Pôles Scientifiques', path: `/dashboard/${guildId}/departments`, icon: Layers },
+    { label: 'Espace Suggestions', path: `/dashboard/${guildId}/suggestions`, icon: Lightbulb },
     { label: 'Rôles Discord', path: `/dashboard/${guildId}/roles`, icon: Shield },
     { label: 'Salons & Pôles', path: `/dashboard/${guildId}/channels`, icon: Hash },
     { label: 'Permissions', path: `/dashboard/${guildId}/permissions`, icon: KeyRound },

@@ -16,7 +16,11 @@ import {
   Lightbulb,
   Sparkles,
   RefreshCw,
-  Send
+  Send,
+  Pencil,
+  Check,
+  Hash,
+  ExternalLink
 } from 'lucide-react';
 import { Modal } from '../components/common/Modal';
 import { ConfirmDialog } from '../components/common/ConfirmDialog';
@@ -39,6 +43,8 @@ interface DepartmentData {
   categoryId?: string;
   categoryName?: string;
   isArchived: boolean;
+  isRecruiting?: boolean;
+  maxMembers?: number;
   memberCount: number;
   pendingCount: number;
   projectCount: number;
@@ -69,6 +75,16 @@ export const DepartmentsPage: React.FC = () => {
   const [isPanelModalOpen, setIsPanelModalOpen] = useState(false);
   const [selectedDeptForMembers, setSelectedDeptForMembers] = useState<DepartmentData | null>(null);
   const [deletingDept, setDeletingDept] = useState<DepartmentData | null>(null);
+  const [editingDept, setEditingDept] = useState<DepartmentData | null>(null);
+
+  // Edit Department Form state
+  const [editName, setEditName] = useState('');
+  const [editShortName, setEditShortName] = useState('');
+  const [editIcon, setEditIcon] = useState('🔬');
+  const [editColor, setEditColor] = useState('#E5092E');
+  const [editDescription, setEditDescription] = useState('');
+  const [editIsRecruiting, setEditIsRecruiting] = useState(true);
+  const [editMaxMembers, setEditMaxMembers] = useState(0);
 
   // Panel modal state
   const [panelChannelId, setPanelChannelId] = useState('');
@@ -82,6 +98,8 @@ export const DepartmentsPage: React.FC = () => {
   const [icon, setIcon] = useState('🔬');
   const [color, setColor] = useState('#E5092E');
   const [description, setDescription] = useState('');
+  const [isRecruiting, setIsRecruiting] = useState(true);
+  const [maxMembers, setMaxMembers] = useState(0);
   const [createChannels, setCreateChannels] = useState(true);
   const [createRoles, setCreateRoles] = useState(true);
   const [createCategory, setCreateCategory] = useState(true);
@@ -93,6 +111,13 @@ export const DepartmentsPage: React.FC = () => {
   const { data: departments = [], isLoading } = useQuery<DepartmentData[]>({
     queryKey: ['departments', guildId],
     queryFn: () => apiFetch(`/guilds/${guildId}/departments`),
+    enabled: !!guildId
+  });
+
+  // Fetch Deployed Panels on Discord
+  const { data: deployedPanels = [] } = useQuery<any[]>({
+    queryKey: ['dept-panels', guildId],
+    queryFn: () => apiFetch(`/guilds/${guildId}/departments/panels`),
     enabled: !!guildId
   });
 
@@ -116,6 +141,7 @@ export const DepartmentsPage: React.FC = () => {
       apiFetch(`/guilds/${guildId}/departments/send-panel`, { method: 'POST', body: JSON.stringify(body) }),
     onSuccess: (res: any) => {
       setPanelFeedback({ type: 'success', message: res.message || 'Panneau envoyé avec succès sur Discord !' });
+      queryClient.invalidateQueries({ queryKey: ['dept-panels', guildId] });
       setTimeout(() => {
         setIsPanelModalOpen(false);
         setPanelFeedback(null);
@@ -123,6 +149,24 @@ export const DepartmentsPage: React.FC = () => {
     },
     onError: (err: any) => {
       setPanelFeedback({ type: 'error', message: err.message || 'Erreur lors de l\'envoi du panneau.' });
+    }
+  });
+
+  // Refresh Panel Mutation
+  const refreshPanelMutation = useMutation({
+    mutationFn: (panelId: string) =>
+      apiFetch(`/guilds/${guildId}/departments/panels/${panelId}/refresh`, { method: 'POST' }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['dept-panels', guildId] });
+    }
+  });
+
+  // Delete Panel Mutation
+  const deletePanelMutation = useMutation({
+    mutationFn: (panelId: string) =>
+      apiFetch(`/guilds/${guildId}/departments/panels/${panelId}`, { method: 'DELETE' }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['dept-panels', guildId] });
     }
   });
 
@@ -134,8 +178,22 @@ export const DepartmentsPage: React.FC = () => {
       queryClient.invalidateQueries({ queryKey: ['departments', guildId] });
       queryClient.invalidateQueries({ queryKey: ['channels', guildId] });
       queryClient.invalidateQueries({ queryKey: ['roles', guildId] });
+      queryClient.invalidateQueries({ queryKey: ['dept-panels', guildId] });
       setIsCreateModalOpen(false);
       resetForm();
+    }
+  });
+
+  // Update Department Mutation
+  const updateMutation = useMutation({
+    mutationFn: ({ deptId, body }: { deptId: string; body: any }) =>
+      apiFetch(`/guilds/${guildId}/departments/${deptId}`, { method: 'PUT', body: JSON.stringify(body) }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['departments', guildId] });
+      queryClient.invalidateQueries({ queryKey: ['channels', guildId] });
+      queryClient.invalidateQueries({ queryKey: ['roles', guildId] });
+      queryClient.invalidateQueries({ queryKey: ['dept-panels', guildId] });
+      setEditingDept(null);
     }
   });
 
@@ -179,9 +237,39 @@ export const DepartmentsPage: React.FC = () => {
     setIcon('🔬');
     setColor('#E5092E');
     setDescription('');
+    setIsRecruiting(true);
+    setMaxMembers(0);
     setCreateChannels(true);
     setCreateRoles(true);
     setCreateCategory(true);
+  };
+
+  const handleOpenEdit = (dept: DepartmentData) => {
+    setEditingDept(dept);
+    setEditName(dept.name);
+    setEditShortName(dept.shortName || '');
+    setEditIcon(dept.icon || '🔬');
+    setEditColor(dept.color || '#E5092E');
+    setEditDescription(dept.description || '');
+    setEditIsRecruiting(dept.isRecruiting !== false);
+    setEditMaxMembers(dept.maxMembers || 0);
+  };
+
+  const handleEditSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingDept) return;
+    updateMutation.mutate({
+      deptId: editingDept.id,
+      body: {
+        name: editName,
+        shortName: editShortName.trim() || undefined,
+        icon: editIcon,
+        color: editColor,
+        description: editDescription,
+        isRecruiting: editIsRecruiting,
+        maxMembers: Number(editMaxMembers) || 0
+      }
+    });
   };
 
   const handleCreateSubmit = (e: React.FormEvent) => {
@@ -192,6 +280,8 @@ export const DepartmentsPage: React.FC = () => {
       icon,
       color,
       description,
+      isRecruiting,
+      maxMembers: Number(maxMembers) || 0,
       createChannels,
       createRoles,
       createCategory
@@ -282,6 +372,59 @@ export const DepartmentsPage: React.FC = () => {
         </button>
       </div>
 
+      {/* Active Deployed Panels (Suggestion C) */}
+      {deployedPanels.length > 0 && activeTab === 'poles' && (
+        <div className="bg-[#121217] border border-[#1C1C24] rounded-2xl p-4">
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center space-x-2">
+              <Send className="w-4 h-4 text-[#E5092E]" />
+              <h3 className="text-xs font-black text-white uppercase tracking-wider">
+                Panneaux de recrutement Discord synchronisés ({deployedPanels.length})
+              </h3>
+            </div>
+            <span className="text-[11px] text-emerald-400 flex items-center font-semibold">
+              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse mr-1.5" />
+              Rechargement automatique actif
+            </span>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+            {deployedPanels.map((p: any) => (
+              <div key={p.id} className="p-3 bg-[#171720] border border-[#242430] rounded-xl flex items-center justify-between">
+                <div>
+                  <div className="text-xs font-bold text-white flex items-center">
+                    <Hash className="w-3.5 h-3.5 mr-1 text-gray-400" />
+                    {p.channelName}
+                  </div>
+                  <div className="text-[10px] text-gray-500">
+                    Déployé le {new Date(p.createdAt).toLocaleDateString('fr-FR')}
+                  </div>
+                </div>
+
+                <div className="flex items-center space-x-1.5">
+                  <button
+                    onClick={() => refreshPanelMutation.mutate(p.id)}
+                    disabled={refreshPanelMutation.isPending}
+                    className="p-1.5 bg-[#20202C] hover:bg-[#2A2A3A] text-gray-300 hover:text-white rounded-lg transition"
+                    title="Forcer la réactualisation"
+                  >
+                    <RefreshCw className={`w-3.5 h-3.5 ${refreshPanelMutation.isPending ? 'animate-spin text-[#E5092E]' : ''}`} />
+                  </button>
+                  <button
+                    onClick={() => deletePanelMutation.mutate(p.id)}
+                    disabled={deletePanelMutation.isPending}
+                    className="p-1.5 bg-[#20202C] hover:bg-rose-500/20 text-gray-400 hover:text-rose-400 rounded-lg transition"
+                    title="Retirer ce message de Discord"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Content */}
       {isLoading ? (
         <div className="bg-[#111827] border border-[#1C1C24] rounded-2xl p-12 text-center text-gray-500">
@@ -336,7 +479,7 @@ export const DepartmentsPage: React.FC = () => {
                         </h3>
                         {dept.shortName && (
                           <span
-                            className="inline-block px-2 py-0.5 text-[10px] font-black rounded-md tracking-wider uppercase mt-1"
+                            className="inline-block px-2 py-0.5 text-[10px] font-black rounded-md tracking-wider uppercase mt-1 mr-2"
                             style={{
                               backgroundColor: `${dept.color || '#E5092E'}20`,
                               color: dept.color || '#E5092E',
@@ -346,16 +489,49 @@ export const DepartmentsPage: React.FC = () => {
                             PÔLE {dept.shortName}
                           </span>
                         )}
+
+                        {/* Status Recrutement */}
+                        <span className={`inline-flex items-center px-2 py-0.5 text-[10px] font-bold rounded-md mt-1 ${
+                          dept.isRecruiting === false
+                            ? 'bg-rose-500/10 text-rose-400 border border-rose-500/20'
+                            : (dept.maxMembers && dept.maxMembers > 0 && (dept.memberCount || 0) >= dept.maxMembers)
+                            ? 'bg-amber-500/10 text-amber-400 border border-amber-500/20'
+                            : 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
+                        }`}>
+                          <span className={`w-1.5 h-1.5 rounded-full mr-1.5 ${
+                            dept.isRecruiting === false
+                              ? 'bg-rose-500'
+                              : (dept.maxMembers && dept.maxMembers > 0 && (dept.memberCount || 0) >= dept.maxMembers)
+                              ? 'bg-amber-500'
+                              : 'bg-emerald-500'
+                          }`} />
+                          {dept.isRecruiting === false
+                            ? 'Recrutement Fermé'
+                            : (dept.maxMembers && dept.maxMembers > 0 && (dept.memberCount || 0) >= dept.maxMembers)
+                            ? `Complet (${dept.memberCount}/${dept.maxMembers})`
+                            : (dept.maxMembers && dept.maxMembers > 0)
+                            ? `Ouvert (${dept.memberCount}/${dept.maxMembers})`
+                            : 'Recrutement Ouvert'}
+                        </span>
                       </div>
                     </div>
 
-                    <button
-                      onClick={() => setDeletingDept(dept)}
-                      className="p-1.5 text-gray-500 hover:text-rose-400 hover:bg-rose-500/10 rounded-lg transition"
-                      title="Archiver ce pôle"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
+                    <div className="flex items-center space-x-1">
+                      <button
+                        onClick={() => handleOpenEdit(dept)}
+                        className="p-1.5 text-gray-400 hover:text-white hover:bg-[#1E1E28] rounded-lg transition"
+                        title="Modifier ce pôle"
+                      >
+                        <Pencil className="w-4 h-4" />
+                      </button>
+                      <button
+                        onClick={() => setDeletingDept(dept)}
+                        className="p-1.5 text-gray-500 hover:text-rose-400 hover:bg-rose-500/10 rounded-lg transition"
+                        title="Archiver ce pôle"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
                   </div>
 
                   {/* Description */}
@@ -558,6 +734,31 @@ export const DepartmentsPage: React.FC = () => {
             />
           </div>
 
+          <div className="grid grid-cols-2 gap-4 p-3 bg-[#1A1A22] rounded-xl border border-[#2E2E3C]">
+            <label className="flex items-center space-x-2 text-xs text-gray-200 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={isRecruiting}
+                onChange={e => setIsRecruiting(e.target.checked)}
+                className="rounded border-[#2E2E3C] text-[#E5092E] focus:ring-[#E5092E] bg-[#121217]"
+              />
+              <span className="font-semibold">Recrutement ouvert</span>
+            </label>
+
+            <div>
+              <label className="block text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-1">
+                Capacité Max (0 = illimité)
+              </label>
+              <input
+                type="number"
+                min="0"
+                value={maxMembers}
+                onChange={e => setMaxMembers(Number(e.target.value))}
+                className="w-full bg-[#121217] border border-[#2E2E3C] rounded-lg px-3 py-1.5 text-xs text-gray-100"
+              />
+            </div>
+          </div>
+
           {/* Assistant 1 Clic Automation */}
           <div className="bg-[#1A1A22]/60 border border-[#2E2E3C] rounded-xl p-4 space-y-2.5">
             <span className="text-xs font-black text-gray-300 uppercase tracking-wider flex items-center">
@@ -614,6 +815,157 @@ export const DepartmentsPage: React.FC = () => {
           </div>
         </form>
       </Modal>
+
+      {/* Modal Modification Pôle (Suggestion A) */}
+      {editingDept && (
+        <Modal
+          isOpen={true}
+          onClose={() => setEditingDept(null)}
+          title={`Modifier le Pôle — ${editingDept.icon} ${editingDept.name}`}
+        >
+          <form onSubmit={handleEditSubmit} className="space-y-4">
+            <div>
+              <label className="block text-xs font-semibold text-gray-300 uppercase tracking-wider mb-1.5">
+                Nom du Pôle Scientifique *
+              </label>
+              <input
+                type="text"
+                required
+                value={editName}
+                onChange={e => setEditName(e.target.value)}
+                className="w-full bg-[#1A1A22] border border-[#2E2E3C] rounded-xl px-4 py-2.5 text-sm text-gray-100 focus:outline-none focus:border-[#E5092E] transition"
+              />
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-xs font-semibold text-gray-300 uppercase tracking-wider mb-1.5">
+                  Sigle / Abréviation
+                </label>
+                <input
+                  type="text"
+                  value={editShortName}
+                  onChange={e => setEditShortName(e.target.value)}
+                  placeholder="ex: IA"
+                  className="w-full bg-[#1A1A22] border border-[#2E2E3C] rounded-xl px-4 py-2.5 text-sm text-gray-100 focus:outline-none focus:border-[#E5092E] transition"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-gray-300 uppercase tracking-wider mb-1.5">
+                  Icône du Pôle
+                </label>
+                <div className="flex items-center space-x-2">
+                  <input
+                    type="text"
+                    value={editIcon}
+                    onChange={e => setEditIcon(e.target.value)}
+                    className="w-14 text-center text-lg bg-[#1A1A22] border border-[#2E2E3C] rounded-xl py-2 text-white focus:outline-none"
+                  />
+                  <div className="flex flex-wrap gap-1 max-w-[180px]">
+                    {emojiPresets.map(em => (
+                      <button
+                        key={em}
+                        type="button"
+                        onClick={() => setEditIcon(em)}
+                        className="p-1 text-sm hover:bg-[#2E2E3C] rounded-md transition"
+                      >
+                        {em}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-gray-300 uppercase tracking-wider mb-1.5">
+                Couleur Thématique
+              </label>
+              <div className="flex items-center space-x-3">
+                <input
+                  type="color"
+                  value={editColor}
+                  onChange={e => setEditColor(e.target.value)}
+                  className="w-10 h-10 rounded-lg bg-transparent border-0 cursor-pointer"
+                />
+                <div className="flex items-center space-x-1.5">
+                  {colorPresets.map(c => (
+                    <button
+                      key={c}
+                      type="button"
+                      onClick={() => setEditColor(c)}
+                      className="w-6 h-6 rounded-full border border-gray-700 transition transform hover:scale-110"
+                      style={{ backgroundColor: c }}
+                    />
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-gray-300 uppercase tracking-wider mb-1.5">
+                Description & Objectifs
+              </label>
+              <textarea
+                rows={2}
+                value={editDescription}
+                onChange={e => setEditDescription(e.target.value)}
+                placeholder="Domaines de recherche, projets phares, compétences abordées..."
+                className="w-full bg-[#1A1A22] border border-[#2E2E3C] rounded-xl px-4 py-2 text-sm text-gray-100 focus:outline-none focus:border-[#E5092E] transition"
+              />
+            </div>
+
+            {/* Recrutement & Quota */}
+            <div className="grid grid-cols-2 gap-4 p-3 bg-[#1A1A22] rounded-xl border border-[#2E2E3C]">
+              <label className="flex items-center space-x-2 text-xs text-gray-200 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={editIsRecruiting}
+                  onChange={e => setEditIsRecruiting(e.target.checked)}
+                  className="rounded border-[#2E2E3C] text-[#E5092E] focus:ring-[#E5092E] bg-[#121217]"
+                />
+                <span className="font-semibold">Recrutement ouvert</span>
+              </label>
+
+              <div>
+                <label className="block text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-1">
+                  Capacité Max (0 = illimité)
+                </label>
+                <input
+                  type="number"
+                  min="0"
+                  value={editMaxMembers}
+                  onChange={e => setEditMaxMembers(Number(e.target.value))}
+                  className="w-full bg-[#121217] border border-[#2E2E3C] rounded-lg px-3 py-1.5 text-xs text-gray-100"
+                />
+              </div>
+            </div>
+
+            <div className="p-3 bg-[#1E1E28] border border-[#323246] rounded-xl text-xs text-gray-300 flex items-center space-x-2">
+              <Sparkles className="w-4 h-4 text-[#E5092E] shrink-0" />
+              <span>La modification synchronisera immédiatement tous vos messages de recrutement déployés sur Discord.</span>
+            </div>
+
+            <div className="flex justify-end space-x-3 pt-2">
+              <button
+                type="button"
+                onClick={() => setEditingDept(null)}
+                className="px-4 py-2 bg-gray-800 hover:bg-gray-700 text-gray-300 text-xs font-semibold rounded-xl transition"
+              >
+                Annuler
+              </button>
+              <button
+                type="submit"
+                disabled={updateMutation.isPending}
+                className="px-5 py-2 bg-[#E5092E] hover:bg-[#c00725] disabled:opacity-50 text-white text-xs font-bold rounded-xl transition shadow-md shadow-[#E5092E]/25"
+              >
+                {updateMutation.isPending ? 'Enregistrement...' : 'Enregistrer et Synchroniser'}
+              </button>
+            </div>
+          </form>
+        </Modal>
+      )}
 
       {/* Modal Membres & Candidatures */}
       {selectedDeptForMembers && (

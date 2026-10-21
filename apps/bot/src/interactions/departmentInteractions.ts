@@ -28,6 +28,27 @@ export async function showDepartmentApplicationModal(
     return;
   }
 
+  // Vérifier statut de recrutement et quota
+  const isRecruiting = dept.is_recruiting !== false && dept.is_recruiting !== 0;
+  if (!isRecruiting) {
+    await interaction.reply({
+      content: `🔴 Les recrutements pour le pôle **${dept.name}** sont actuellement fermés.`,
+      ephemeral: true
+    });
+    return;
+  }
+
+  if (dept.max_members && dept.max_members > 0) {
+    const countRow = (await db.prepare('SELECT COUNT(*) as count FROM department_members WHERE department_id = ? AND status = \'approved\'').get(dept.id)) as any;
+    if (countRow && countRow.count >= dept.max_members) {
+      await interaction.reply({
+        content: `🔴 Le pôle **${dept.name}** a atteint son quota maximal de places (${countRow.count}/${dept.max_members}). Les candidatures sont fermées pour le moment.`,
+        ephemeral: true
+      });
+      return;
+    }
+  }
+
   // Vérifier si déjà membre ou en attente
   const existing = (await db.prepare('SELECT * FROM department_members WHERE department_id = ? AND user_id = ?').get(dept.id, interaction.user.id)) as any;
   if (existing) {
@@ -274,6 +295,13 @@ export async function handleDepartmentStaffReview(interaction: ButtonInteraction
       roleGiven = true;
       await candidateMember.send({
         content: `🎉 Félicitations ! Votre candidature pour rejoindre le pôle **${dept.icon || '🔬'} ${dept.name}** au sein de **CORTEX Scientific Club** a été **validée** par <@${interaction.user.id}> ! Vous avez reçu le rôle associé.`
+      }).catch(() => null);
+    }
+  } else if (!isApprove) {
+    const candidateMember = await interaction.guild.members.fetch(candidateUserId).catch(() => null);
+    if (candidateMember) {
+      await candidateMember.send({
+        content: `ℹ️ Bonjour <@${candidateUserId}>,\n\nVotre candidature pour rejoindre le pôle **${dept.icon || '🔬'} ${dept.name}** a été examinée par les responsables.\n\nMalheureusement, elle n'a pas pu être retenue pour cette session. Nous vous remercions chaleureusement pour votre démarche et votre intérêt envers **CORTEX Scientific Club** !`
       }).catch(() => null);
     }
   }

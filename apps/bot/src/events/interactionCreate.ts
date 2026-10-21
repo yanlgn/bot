@@ -6,6 +6,11 @@ import {
   handleDepartmentModalSubmit,
   handleDepartmentStaffReview
 } from '../interactions/departmentInteractions.js';
+import {
+  handleSuggestionButtonClick,
+  handleSuggestionModalSubmit,
+  handleSuggestionStaffReview
+} from '../interactions/suggestionInteractions.js';
 
 export const name = Events.InteractionCreate;
 export const once = false;
@@ -34,8 +39,18 @@ export async function execute(interaction: Interaction) {
       }
     }
 
-    // 3. Boutons interactifs (candidature ou validation staff)
+    // 3. Boutons interactifs (candidature, suggestions ou validations staff)
     if (interaction.isButton()) {
+      if (interaction.customId === 'cortex_suggestion_btn') {
+        await handleSuggestionButtonClick(interaction);
+        return;
+      }
+
+      if (interaction.customId.startsWith('cortex_sug_')) {
+        await handleSuggestionStaffReview(interaction);
+        return;
+      }
+
       if (interaction.customId.startsWith('cortex_dept_btn_')) {
         const deptId = interaction.customId.replace('cortex_dept_btn_', '');
         await showDepartmentApplicationModal(interaction, deptId);
@@ -48,8 +63,13 @@ export async function execute(interaction: Interaction) {
       }
     }
 
-    // 4. Soumission du formulaire Modal de candidature
+    // 4. Soumission des formulaires Modals
     if (interaction.isModalSubmit()) {
+      if (interaction.customId === 'cortex_suggestion_modal') {
+        await handleSuggestionModalSubmit(interaction);
+        return;
+      }
+
       if (interaction.customId.startsWith('cortex_dept_modal_')) {
         await handleDepartmentModalSubmit(interaction);
         return;

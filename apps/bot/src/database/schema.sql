@@ -74,8 +74,47 @@ CREATE TABLE IF NOT EXISTS departments (
   member_role_id TEXT,
   category_id TEXT,
   is_archived BOOLEAN DEFAULT 0,
+  is_recruiting BOOLEAN DEFAULT 1,
+  max_members INTEGER DEFAULT 0,
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
   updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS department_panels (
+  id TEXT PRIMARY KEY,
+  guild_id TEXT NOT NULL,
+  channel_id TEXT NOT NULL,
+  message_id TEXT NOT NULL,
+  title TEXT,
+  description TEXT,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS suggestion_configs (
+  guild_id TEXT PRIMARY KEY,
+  submission_channel_id TEXT,
+  review_channel_id TEXT,
+  panel_message_id TEXT,
+  title TEXT,
+  description TEXT,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS suggestions (
+  id TEXT PRIMARY KEY,
+  guild_id TEXT NOT NULL,
+  user_id TEXT NOT NULL,
+  title TEXT NOT NULL,
+  description TEXT NOT NULL,
+  benefits TEXT,
+  status TEXT CHECK(status IN ('pending', 'approved', 'rejected', 'in_discussion')) DEFAULT 'pending',
+  discord_message_id TEXT,
+  review_notes TEXT,
+  reviewed_by TEXT,
+  reviewed_at DATETIME,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE TABLE IF NOT EXISTS department_members (
