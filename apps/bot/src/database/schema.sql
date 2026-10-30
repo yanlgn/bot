@@ -121,6 +121,9 @@ CREATE TABLE IF NOT EXISTS department_members (
   department_id TEXT NOT NULL,
   guild_id TEXT NOT NULL,
   user_id TEXT NOT NULL,
+  first_name TEXT,
+  last_name TEXT,
+  email TEXT,
   role TEXT CHECK(role IN ('leader', 'deputy', 'member')) DEFAULT 'member',
   status TEXT CHECK(status IN ('pending', 'approved', 'rejected')) DEFAULT 'approved',
   motivation TEXT,
@@ -162,24 +165,48 @@ CREATE TABLE IF NOT EXISTS events (
   description TEXT NOT NULL,
   type TEXT CHECK(type IN ('conference', 'workshop', 'competition', 'field_trip', 'hackathon', 'training')) NOT NULL,
   scheduled_start_time DATETIME NOT NULL,
+  end_time DATETIME,
   location TEXT NOT NULL,
   speaker TEXT,
   max_participants INTEGER,
   target_audience TEXT,
+  is_recurring BOOLEAN DEFAULT 0,
+  recurrence_pattern TEXT,
+  allow_cancellation BOOLEAN DEFAULT 1,
   status TEXT CHECK(status IN ('draft', 'published', 'cancelled', 'completed')) DEFAULT 'published',
   channel_id TEXT,
+  discord_message_id TEXT,
   participant_role_id TEXT,
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
   updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 
+CREATE TABLE IF NOT EXISTS event_sessions (
+  id TEXT PRIMARY KEY,
+  event_id TEXT NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+  guild_id TEXT NOT NULL,
+  name TEXT NOT NULL,
+  description TEXT,
+  scheduled_start_time DATETIME,
+  scheduled_end_time DATETIME,
+  max_participants INTEGER DEFAULT 0,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
 CREATE TABLE IF NOT EXISTS event_participants (
-  event_id TEXT NOT NULL,
+  id TEXT PRIMARY KEY,
+  event_id TEXT NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+  session_id TEXT,
+  guild_id TEXT NOT NULL,
   user_id TEXT NOT NULL,
+  first_name TEXT NOT NULL,
+  last_name TEXT NOT NULL,
+  email TEXT NOT NULL,
+  notes TEXT,
+  status TEXT CHECK(status IN ('registered', 'cancelled')) DEFAULT 'registered',
   registered_at DATETIME DEFAULT CURRENT_TIMESTAMP,
   attended BOOLEAN DEFAULT 0,
-  PRIMARY KEY (event_id, user_id),
-  FOREIGN KEY (event_id) REFERENCES events(id) ON DELETE CASCADE
+  UNIQUE(event_id, user_id)
 );
 
 CREATE TABLE IF NOT EXISTS resources (
@@ -199,6 +226,9 @@ CREATE TABLE IF NOT EXISTS candidatures (
   id TEXT PRIMARY KEY,
   guild_id TEXT NOT NULL,
   user_id TEXT NOT NULL,
+  first_name TEXT,
+  last_name TEXT,
+  email TEXT,
   study_field TEXT NOT NULL,
   motivation TEXT NOT NULL,
   interests TEXT DEFAULT '[]',

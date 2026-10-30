@@ -36,6 +36,33 @@ export async function handleCandidatureButtonClick(interaction: ButtonInteractio
     .setCustomId('cortex_cand_modal')
     .setTitle('📝 Candidature — CORTEX Scientific Club');
 
+  const firstNameInput = new TextInputBuilder()
+    .setCustomId('cand_first_name')
+    .setLabel('Prénom :')
+    .setStyle(TextInputStyle.Short)
+    .setPlaceholder('Ex : Mohamed, Amine, Sarah...')
+    .setMinLength(2)
+    .setMaxLength(50)
+    .setRequired(true);
+
+  const lastNameInput = new TextInputBuilder()
+    .setCustomId('cand_last_name')
+    .setLabel('Nom :')
+    .setStyle(TextInputStyle.Short)
+    .setPlaceholder('Ex : Benali, Kaci, Mansouri...')
+    .setMinLength(2)
+    .setMaxLength(50)
+    .setRequired(true);
+
+  const emailInput = new TextInputBuilder()
+    .setCustomId('cand_email')
+    .setLabel('Adresse Email :')
+    .setStyle(TextInputStyle.Short)
+    .setPlaceholder('Ex : prenom.nom@univ.dz ou personnel...')
+    .setMinLength(5)
+    .setMaxLength(100)
+    .setRequired(true);
+
   const studyInput = new TextInputBuilder()
     .setCustomId('cand_study')
     .setLabel('Filière / Spécialité & Niveau :')
@@ -47,35 +74,19 @@ export async function handleCandidatureButtonClick(interaction: ButtonInteractio
 
   const motivationInput = new TextInputBuilder()
     .setCustomId('cand_motivation')
-    .setLabel('Vos motivations pour rejoindre CORTEX :')
+    .setLabel('Motivations, Domaines & Disponibilité :')
     .setStyle(TextInputStyle.Paragraph)
-    .setPlaceholder('Pourquoi souhaitez-vous rejoindre le club et que souhaitez-vous y apporter ?')
+    .setPlaceholder('Pourquoi rejoindre CORTEX, quels domaines vous passionnent (IA, Robotique, etc.) et votre temps disponible ?')
     .setMinLength(10)
     .setMaxLength(1000)
     .setRequired(true);
 
-  const interestsInput = new TextInputBuilder()
-    .setCustomId('cand_interests')
-    .setLabel('Centres d\'intérêt & Compétences :')
-    .setStyle(TextInputStyle.Paragraph)
-    .setPlaceholder('Ex : Intelligence Artificielle, Robotique, Électronique, Web, Design, ou débutant motivé...')
-    .setMinLength(2)
-    .setMaxLength(1000)
-    .setRequired(true);
-
-  const availabilityInput = new TextInputBuilder()
-    .setCustomId('cand_availability')
-    .setLabel('Temps disponible estimé :')
-    .setStyle(TextInputStyle.Short)
-    .setPlaceholder('Ex : 3 à 5 heures par semaine, disponible les week-ends...')
-    .setMaxLength(100)
-    .setRequired(false);
-
   modal.addComponents(
+    new ActionRowBuilder<TextInputBuilder>().addComponents(firstNameInput),
+    new ActionRowBuilder<TextInputBuilder>().addComponents(lastNameInput),
+    new ActionRowBuilder<TextInputBuilder>().addComponents(emailInput),
     new ActionRowBuilder<TextInputBuilder>().addComponents(studyInput),
-    new ActionRowBuilder<TextInputBuilder>().addComponents(motivationInput),
-    new ActionRowBuilder<TextInputBuilder>().addComponents(interestsInput),
-    new ActionRowBuilder<TextInputBuilder>().addComponents(availabilityInput)
+    new ActionRowBuilder<TextInputBuilder>().addComponents(motivationInput)
   );
 
   await interaction.showModal(modal);
@@ -88,19 +99,22 @@ export async function handleCandidatureModalSubmit(interaction: ModalSubmitInter
   if (!interaction.guild) return;
 
   const guildId = interaction.guild.id;
-  const studyField = interaction.fields.getTextInputValue('cand_study');
-  const motivation = interaction.fields.getTextInputValue('cand_motivation');
-  const interests = interaction.fields.getTextInputValue('cand_interests');
-  const availability = interaction.fields.getTextInputValue('cand_availability') || 'Non précisé';
+  const firstName = interaction.fields.getTextInputValue('cand_first_name').trim();
+  const lastName = interaction.fields.getTextInputValue('cand_last_name').trim();
+  const email = interaction.fields.getTextInputValue('cand_email').trim();
+  const studyField = interaction.fields.getTextInputValue('cand_study').trim();
+  const motivation = interaction.fields.getTextInputValue('cand_motivation').trim();
+  const interests = 'Précisé dans le dossier';
+  const availability = 'Précisé dans le dossier';
 
   const config = (await db.prepare('SELECT * FROM candidature_configs WHERE guild_id = ?').get(guildId)) as any;
   const candId = `cand_${Date.now().toString(36)}_${Math.random().toString(36).substring(2, 7)}`;
 
   // Enregistrer en base
   await db.prepare(`
-    INSERT INTO candidatures (id, guild_id, user_id, study_field, motivation, interests, availability, status, created_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, 'pending', datetime('now'))
-  `).run(candId, guildId, interaction.user.id, studyField, motivation, interests, availability);
+    INSERT INTO candidatures (id, guild_id, user_id, first_name, last_name, email, study_field, motivation, interests, availability, status, created_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', datetime('now'))
+  `).run(candId, guildId, interaction.user.id, firstName, lastName, email, studyField, motivation, interests, availability);
 
   // Mettre à jour l'utilisateur
   try {
@@ -123,12 +137,11 @@ export async function handleCandidatureModalSubmit(interaction: ModalSubmitInter
   const confirmEmbed = new EmbedBuilder()
     .setTitle('🎉 Candidature Envoyée avec Succès')
     .setColor(0x10B981)
-    .setDescription(`Merci <@${interaction.user.id}> ! Votre demande d'adhésion officielle à **CORTEX Scientific Club** a été enregistrée et transmise aux responsables.`)
+    .setDescription(`Merci **${firstName} ${lastName}** (<@${interaction.user.id}>) ! Votre demande d'adhésion officielle à **CORTEX Scientific Club** a été enregistrée et transmise aux responsables.`)
     .addFields(
+      { name: '👤 Candidat', value: `${firstName} ${lastName} (${email})`, inline: true },
       { name: '🎓 Cursus / Filière', value: studyField, inline: true },
-      { name: '⏱️ Disponibilité', value: availability, inline: true },
-      { name: '🎯 Motivations', value: motivation.slice(0, 1024) },
-      { name: '🔬 Domaines d\'intérêt', value: interests.slice(0, 1024) }
+      { name: '🎯 Motivations & Profil', value: motivation.slice(0, 1024) }
     )
     .setFooter({ text: 'CORTEX Scientific Club • Vous recevrez une notification par message privé lors de l\'examen de votre dossier.' })
     .setTimestamp();
@@ -145,11 +158,9 @@ export async function handleCandidatureModalSubmit(interaction: ModalSubmitInter
           .setColor(0xE5092E)
           .setThumbnail(interaction.user.displayAvatarURL())
           .addFields(
-            { name: '👤 Candidat', value: `<@${interaction.user.id}> (${interaction.user.tag})`, inline: true },
+            { name: '👤 Candidat', value: `**${firstName} ${lastName}** (<@${interaction.user.id}>)\n📧 ${email}`, inline: true },
             { name: '🎓 Filière', value: studyField, inline: true },
-            { name: '⏱️ Disponibilité', value: availability, inline: true },
-            { name: '🎯 Motivations', value: motivation.slice(0, 1024) },
-            { name: '🛠️ Compétences & Centres d\'intérêt', value: interests.slice(0, 1024) }
+            { name: '🎯 Motivations & Parcours', value: motivation.slice(0, 1024) }
           )
           .setFooter({ text: `ID Candidat: ${interaction.user.id} • Réf: ${candId}` })
           .setTimestamp();

@@ -8,6 +8,7 @@ import * as ressource from './club/ressource.js';
 import * as candidature from './club/candidature.js';
 import * as sondage from './club/sondage.js';
 import * as departement from './club/departement.js';
+import * as liste from './club/liste.js';
 
 import * as config from './admin/config.js';
 import * as role from './admin/role.js';
@@ -26,6 +27,7 @@ export const commands = [
   candidature,
   sondage,
   departement,
+  liste,
   config,
   role,
   canal,

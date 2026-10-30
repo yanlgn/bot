@@ -12,6 +12,19 @@ export interface ProjectRecord {
   updatedAt: string;
 }
 
+export interface EventSessionRecord {
+  id: string;
+  eventId: string;
+  guildId: string;
+  name: string;
+  description?: string | null;
+  scheduledStartTime?: string | null;
+  scheduledEndTime?: string | null;
+  maxParticipants?: number | null;
+  participantCount?: number;
+  createdAt: string;
+}
+
 export interface EventRecord {
   id: string;
   guildId: string;
@@ -19,14 +32,21 @@ export interface EventRecord {
   description: string;
   type: 'conference' | 'workshop' | 'competition' | 'field_trip' | 'hackathon' | 'training';
   scheduledStartTime: string;
+  endTime?: string | null;
   location: string;
   speaker?: string | null;
   maxParticipants?: number | null;
   targetAudience?: string | null;
+  isRecurring?: boolean;
+  recurrencePattern?: string | null;
+  allowCancellation?: boolean;
   status: 'draft' | 'published' | 'cancelled' | 'completed';
   channelId?: string | null;
+  channelName?: string | null;
+  discordMessageId?: string | null;
   participantRoleId?: string | null;
   participantCount?: number;
+  sessions?: EventSessionRecord[];
   createdAt: string;
   updatedAt: string;
 }

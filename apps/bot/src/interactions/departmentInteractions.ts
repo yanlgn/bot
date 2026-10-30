@@ -72,6 +72,33 @@ export async function showDepartmentApplicationModal(
     .setCustomId(`cortex_dept_modal_${dept.id}`)
     .setTitle(`Candidature : ${dept.name}`.slice(0, 45));
 
+  const firstNameInput = new TextInputBuilder()
+    .setCustomId('dept_first_name')
+    .setLabel('Prénom :')
+    .setStyle(TextInputStyle.Short)
+    .setPlaceholder('Ex : Mohamed, Amine, Sarah...')
+    .setMinLength(2)
+    .setMaxLength(50)
+    .setRequired(true);
+
+  const lastNameInput = new TextInputBuilder()
+    .setCustomId('dept_last_name')
+    .setLabel('Nom :')
+    .setStyle(TextInputStyle.Short)
+    .setPlaceholder('Ex : Benali, Kaci, Mansouri...')
+    .setMinLength(2)
+    .setMaxLength(50)
+    .setRequired(true);
+
+  const emailInput = new TextInputBuilder()
+    .setCustomId('dept_email')
+    .setLabel('Adresse Email :')
+    .setStyle(TextInputStyle.Short)
+    .setPlaceholder('Ex : prenom.nom@univ.dz ou personnel...')
+    .setMinLength(5)
+    .setMaxLength(100)
+    .setRequired(true);
+
   const motivationInput = new TextInputBuilder()
     .setCustomId('dept_motivation')
     .setLabel('Vos motivations pour ce pôle :')
@@ -83,25 +110,19 @@ export async function showDepartmentApplicationModal(
 
   const skillsInput = new TextInputBuilder()
     .setCustomId('dept_skills')
-    .setLabel('Compétences / Technologies / Projets :')
+    .setLabel('Compétences / Projets / Disponibilité :')
     .setStyle(TextInputStyle.Paragraph)
-    .setPlaceholder('Ex : Python, PyTorch, C++, Arduino, ROS, Web, design, ou débutant curieux...')
+    .setPlaceholder('Ex : Python, C++, ROS, Web, ou débutant curieux... Disponibilité : 4h/semaine')
     .setMinLength(2)
     .setMaxLength(1000)
     .setRequired(true);
 
-  const availabilityInput = new TextInputBuilder()
-    .setCustomId('dept_availability')
-    .setLabel('Temps disponible estimé :')
-    .setStyle(TextInputStyle.Short)
-    .setPlaceholder('Ex : 3 à 5 heures par semaine, disponible les week-ends...')
-    .setMaxLength(100)
-    .setRequired(false);
-
   modal.addComponents(
+    new ActionRowBuilder<TextInputBuilder>().addComponents(firstNameInput),
+    new ActionRowBuilder<TextInputBuilder>().addComponents(lastNameInput),
+    new ActionRowBuilder<TextInputBuilder>().addComponents(emailInput),
     new ActionRowBuilder<TextInputBuilder>().addComponents(motivationInput),
-    new ActionRowBuilder<TextInputBuilder>().addComponents(skillsInput),
-    new ActionRowBuilder<TextInputBuilder>().addComponents(availabilityInput)
+    new ActionRowBuilder<TextInputBuilder>().addComponents(skillsInput)
   );
 
   await interaction.showModal(modal);
@@ -117,9 +138,12 @@ export async function handleDepartmentModalSubmit(interaction: ModalSubmitIntera
     return;
   }
 
+  const firstName = interaction.fields.getTextInputValue('dept_first_name').trim();
+  const lastName = interaction.fields.getTextInputValue('dept_last_name').trim();
+  const email = interaction.fields.getTextInputValue('dept_email').trim();
   const motivation = interaction.fields.getTextInputValue('dept_motivation');
   const skills = interaction.fields.getTextInputValue('dept_skills');
-  const availability = interaction.fields.getTextInputValue('dept_availability') || 'Non précisé';
+  const availability = 'Précisé dans compétences/disponibilité';
 
   // Enregistrer/mettre à jour l'utilisateur dans users
   try {
@@ -140,27 +164,30 @@ export async function handleDepartmentModalSubmit(interaction: ModalSubmitIntera
 
   // Enregistrer la candidature dans department_members
   await db.prepare(`
-    INSERT INTO department_members (department_id, guild_id, user_id, role, status, motivation, skills, availability, requested_at)
-    VALUES (?, ?, ?, 'member', 'pending', ?, ?, ?, datetime('now'))
+    INSERT INTO department_members (department_id, guild_id, user_id, first_name, last_name, email, role, status, motivation, skills, availability, requested_at)
+    VALUES (?, ?, ?, ?, ?, ?, 'member', 'pending', ?, ?, ?, datetime('now'))
     ON CONFLICT(department_id, user_id) DO UPDATE SET
+      first_name = excluded.first_name,
+      last_name = excluded.last_name,
+      email = excluded.email,
       status = 'pending',
       motivation = excluded.motivation,
       skills = excluded.skills,
       availability = excluded.availability,
       requested_at = datetime('now')
-  `).run(dept.id, interaction.guild.id, interaction.user.id, motivation, skills, availability);
+  `).run(dept.id, interaction.guild.id, interaction.user.id, firstName, lastName, email, motivation, skills, availability);
 
   // Répondre à l'utilisateur
   const userConfirmEmbed = new EmbedBuilder()
     .setTitle(`🎉 Candidature envoyée : Pôle ${dept.name}`)
     .setColor(0x10B981)
-    .setDescription(`Merci <@${interaction.user.id}> ! Votre candidature a été transmise aux responsables du pôle **${dept.icon || '🔬'} ${dept.name}**.`)
+    .setDescription(`Merci **${firstName} ${lastName}** (<@${interaction.user.id}>) ! Votre candidature a été transmise aux responsables du pôle **${dept.icon || '🔬'} ${dept.name}**.`)
     .addFields(
+      { name: '👤 Candidat', value: `${firstName} ${lastName} (${email})`, inline: false },
       { name: '🎯 Motivations', value: motivation.slice(0, 1024) },
-      { name: '🛠️ Compétences & Expérience', value: skills.slice(0, 1024) },
-      { name: '⏱️ Disponibilité', value: availability, inline: true }
+      { name: '🛠️ Compétences & Disponibilité', value: skills.slice(0, 1024) }
     )
-    .setFooter({ text: 'CORTEX Scientific Club • Vous recevrez une notification lors du traitement de votre dossier.' });
+    .setFooter({ text: 'CORTEX Scientific Club • Vos réponses seront examinées par les responsables' });
 
   await interaction.reply({ embeds: [userConfirmEmbed], ephemeral: true });
 
@@ -208,11 +235,10 @@ export async function handleDepartmentModalSubmit(interaction: ModalSubmitIntera
         .setColor(0xE5092E)
         .setThumbnail(interaction.user.displayAvatarURL())
         .addFields(
-          { name: '👤 Candidat', value: `<@${interaction.user.id}> (${interaction.user.tag})`, inline: true },
+          { name: '👤 Candidat', value: `**${firstName} ${lastName}** (<@${interaction.user.id}>)\n📧 ${email}`, inline: true },
           { name: '🔬 Pôle visé', value: `**${dept.name}**`, inline: true },
-          { name: '⏱️ Disponibilité', value: availability, inline: true },
           { name: '🎯 Motivations', value: motivation.slice(0, 1024) },
-          { name: '🛠️ Compétences & Projets', value: skills.slice(0, 1024) }
+          { name: '🛠️ Compétences & Disponibilité', value: skills.slice(0, 1024) }
         )
         .setFooter({ text: `ID Candidat: ${interaction.user.id} • Pôle: ${dept.id}` })
         .setTimestamp();

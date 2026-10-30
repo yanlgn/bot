@@ -1,0 +1,512 @@
+import {
+  ButtonInteraction,
+  StringSelectMenuInteraction,
+  ModalSubmitInteraction,
+  ModalBuilder,
+  TextInputBuilder,
+  TextInputStyle,
+  ActionRowBuilder,
+  EmbedBuilder,
+  ButtonBuilder,
+  ButtonStyle,
+  StringSelectMenuBuilder,
+  TextChannel,
+  Guild
+} from 'discord.js';
+import { db } from '../database/db.js';
+import { logger } from '../utils/logger.js';
+
+/**
+ * Construit le payload Discord (Embed + Composants interactifs) pour un événement
+ */
+export async function buildEventMessagePayload(guildId: string, eventId: string) {
+  const event = (await db.prepare('SELECT * FROM events WHERE id = ? AND guild_id = ?').get(eventId, guildId)) as any;
+  if (!event) return null;
+
+  const sessions = (await db.prepare(`
+    SELECT s.*,
+      (SELECT COUNT(*) FROM event_participants ep WHERE ep.event_id = s.event_id AND ep.session_id = s.id AND ep.status = 'registered') as participant_count
+    FROM event_sessions s
+    WHERE s.event_id = ?
+    ORDER BY s.scheduled_start_time ASC, s.created_at ASC
+  `).all(eventId)) as any[];
+
+  const totalRegisteredRow = (await db.prepare(`
+    SELECT COUNT(*) as count FROM event_participants WHERE event_id = ? AND status = 'registered'
+  `).get(eventId)) as any;
+  const totalRegistered = totalRegisteredRow ? Number(totalRegisteredRow.count) : 0;
+
+  const isRecurring = Boolean(event.is_recurring);
+  const allowCancellation = event.allow_cancellation !== false && event.allow_cancellation !== 0;
+  const maxTotal = event.max_participants ? Number(event.max_participants) : 0;
+  const isGlobalFull = maxTotal > 0 && totalRegistered >= maxTotal;
+
+  const embed = new EmbedBuilder()
+    .setTitle(`🔬 ${event.title}`)
+    .setDescription(event.description || 'Aucune description fournie.')
+    .setColor(0xE5092E)
+    .addFields(
+      { name: '🏷️ Type', value: event.type ? event.type.toUpperCase() : 'ÉVÉNEMENT', inline: true },
+      { name: '📍 Lieu', value: event.location || 'Discord / Local', inline: true },
+      { name: '🎙️ Intervenant', value: event.speaker || '*Non spécifié*', inline: true }
+    );
+
+  if (isRecurring) {
+    embed.addFields({
+      name: '🔁 Périodicité (Événement Récurrent)',
+      value: `**${event.recurrence_pattern || 'Récurrent (sessions régulières)'}**\nProchaine date : <t:${Math.floor(new Date(event.scheduled_start_time).getTime() / 1000)}:F>`,
+      inline: false
+    });
+  } else {
+    const ts = Math.floor(new Date(event.scheduled_start_time).getTime() / 1000);
+    embed.addFields({
+      name: '⏰ Date & Heure',
+      value: `<t:${ts}:F> (<t:${ts}:R>)`,
+      inline: false
+    });
+  }
+
+  // Section des sessions si disponibles
+  if (sessions.length > 0) {
+    const sessionsList = sessions.map((s, idx) => {
+      const maxS = s.max_participants ? Number(s.max_participants) : 0;
+      const countS = Number(s.participant_count) || 0;
+      const isFull = maxS > 0 && countS >= maxS;
+      const remaining = maxS > 0 ? Math.max(0, maxS - countS) : null;
+
+      let statusBadge = '🟢 Places disponibles';
+      if (isFull) {
+        statusBadge = '🔴 COMPLET';
+      } else if (remaining !== null) {
+        statusBadge = `🟡 ${remaining} place(s) restante(s)`;
+      }
+
+      let timeInfo = '';
+      if (s.scheduled_start_time) {
+        const sTs = Math.floor(new Date(s.scheduled_start_time).getTime() / 1000);
+        timeInfo = ` • <t:${sTs}:t>`;
+      }
+
+      return `**${idx + 1}. ${s.name}**${timeInfo}\n` +
+        `└ Quota : **${countS}${maxS > 0 ? ` / ${maxS}` : ' (illimité)'}** inscrits • ${statusBadge}`;
+    }).join('\n\n');
+
+    embed.addFields({
+      name: '📋 Sessions Disponibles',
+      value: sessionsList,
+      inline: false
+    });
+  } else {
+    // Événement à session unique
+    let quotaText = '*Places illimitées*';
+    if (maxTotal > 0) {
+      const remaining = Math.max(0, maxTotal - totalRegistered);
+      quotaText = `**${totalRegistered} / ${maxTotal}** réservées (${remaining > 0 ? `${remaining} restante(s)` : '🔴 COMPLET'})`;
+    } else {
+      quotaText = `**${totalRegistered}** participant(s) inscrit(s)`;
+    }
+
+    embed.addFields({
+      name: '🎟️ Places & Jauge',
+      value: quotaText,
+      inline: true
+    });
+  }
+
+  embed.addFields({
+    name: '⚙️ Modalités d\'inscription',
+    value: allowCancellation
+      ? '✅ Les réservations peuvent être annulées en cas d\'imprévu pour libérer la place.'
+      : '⚠️ Les réservations sont fermes et définitives (places fixes non libérables).',
+    inline: false
+  });
+
+  embed.setFooter({ text: 'CORTEX Scientific Club • Remplissez le formulaire (Nom, Prénom, Email) pour valider votre place' });
+  embed.setTimestamp();
+
+  // Composants interactifs
+  const components: ActionRowBuilder<any>[] = [];
+
+  if (sessions.length > 1) {
+    // Select menu pour choisir la session
+    const selectMenu = new StringSelectMenuBuilder()
+      .setCustomId(`cortex_ev_sess_select:${event.id}`)
+      .setPlaceholder('🎯 Sélectionnez votre session pour réserver...')
+      .addOptions(
+        sessions.slice(0, 25).map(s => {
+          const maxS = s.max_participants ? Number(s.max_participants) : 0;
+          const countS = Number(s.participant_count) || 0;
+          const isFull = maxS > 0 && countS >= maxS;
+          const remaining = maxS > 0 ? Math.max(0, maxS - countS) : null;
+
+          return {
+            label: `${isFull ? '⛔ ' : ''}${s.name}`.slice(0, 100),
+            value: s.id,
+            description: (isFull ? 'Session complète' : (remaining !== null ? `${remaining} place(s) disponible(s)` : 'Places illimitées')).slice(0, 100),
+            emoji: isFull ? '🔴' : '🎟️'
+          };
+        })
+      );
+
+    components.push(new ActionRowBuilder().addComponents(selectMenu));
+  }
+
+  // Ligne de boutons : Boutons de sessions ou bouton unique de réservation
+  const buttonRow = new ActionRowBuilder<ButtonBuilder>();
+
+  if (sessions.length > 0 && sessions.length <= 5) {
+    for (const s of sessions) {
+      const maxS = s.max_participants ? Number(s.max_participants) : 0;
+      const countS = Number(s.participant_count) || 0;
+      const isFull = maxS > 0 && countS >= maxS;
+
+      buttonRow.addComponents(
+        new ButtonBuilder()
+          .setCustomId(`cortex_ev_join:${event.id}:${s.id}`)
+          .setLabel(`Réserver : ${s.name}`.slice(0, 80))
+          .setEmoji(isFull ? '🔴' : '🎟️')
+          .setStyle(isFull ? ButtonStyle.Secondary : ButtonStyle.Primary)
+          .setDisabled(isFull)
+      );
+    }
+  } else if (sessions.length === 0) {
+    buttonRow.addComponents(
+      new ButtonBuilder()
+        .setCustomId(`cortex_ev_join:${event.id}:main`)
+        .setLabel('Réserver ma place')
+        .setEmoji(isGlobalFull ? '🔴' : '🎟️')
+        .setStyle(isGlobalFull ? ButtonStyle.Secondary : ButtonStyle.Success)
+        .setDisabled(isGlobalFull)
+    );
+  }
+
+  // Bouton de désinscription si autorisé
+  if (allowCancellation) {
+    buttonRow.addComponents(
+      new ButtonBuilder()
+        .setCustomId(`cortex_ev_leave:${event.id}`)
+        .setLabel('Annuler ma réservation')
+        .setEmoji('❌')
+        .setStyle(ButtonStyle.Danger)
+    );
+  }
+
+  if (buttonRow.components.length > 0) {
+    components.push(buttonRow);
+  }
+
+  return { embed, components };
+}
+
+/**
+ * Met à jour le message Discord d'un événement en temps réel
+ */
+export async function syncEventDiscordMessage(guild: Guild, eventId: string) {
+  try {
+    const event = (await db.prepare('SELECT * FROM events WHERE id = ? AND guild_id = ?').get(eventId, guild.id)) as any;
+    if (!event || !event.channel_id || !event.discord_message_id) return;
+
+    const channel = await guild.channels.fetch(event.channel_id).catch(() => null);
+    if (!channel || !channel.isTextBased()) return;
+
+    const msg = await (channel as TextChannel).messages.fetch(event.discord_message_id).catch(() => null);
+    if (!msg) return;
+
+    const payload = await buildEventMessagePayload(guild.id, eventId);
+    if (!payload) return;
+
+    await msg.edit({
+      embeds: [payload.embed],
+      components: payload.components
+    });
+  } catch (err) {
+    logger.error({ err }, 'Erreur lors de la mise à jour du message Discord de l\'événement');
+  }
+}
+
+/**
+ * Affiche le Modal de réservation d'événement (Nom, Prénom, Email, Notes)
+ */
+export async function showEventReservationModal(
+  interaction: ButtonInteraction | StringSelectMenuInteraction,
+  eventId: string,
+  sessionId: string
+) {
+  if (!interaction.guild) return;
+
+  const guildId = interaction.guild.id;
+  const event = (await db.prepare('SELECT * FROM events WHERE id = ? AND guild_id = ?').get(eventId, guildId)) as any;
+  if (!event) {
+    await interaction.reply({ content: '❌ Événement introuvable.', ephemeral: true });
+    return;
+  }
+
+  // Vérifier si déjà inscrit à cet événement
+  const existing = (await db.prepare('SELECT * FROM event_participants WHERE event_id = ? AND user_id = ? AND status = \'registered\'').get(eventId, interaction.user.id)) as any;
+  if (existing) {
+    await interaction.reply({
+      content: '✅ Vous êtes déjà inscrit(e) à cet événement ! Utilisez le bouton d\'annulation si vous souhaitez libérer votre place.',
+      ephemeral: true
+    });
+    return;
+  }
+
+  // Vérifier si la session demandée est pleine
+  if (sessionId && sessionId !== 'main') {
+    const session = (await db.prepare('SELECT * FROM event_sessions WHERE id = ? AND event_id = ?').get(sessionId, eventId)) as any;
+    if (session && session.max_participants > 0) {
+      const count = (await db.prepare('SELECT COUNT(*) as count FROM event_participants WHERE session_id = ? AND status = \'registered\'').get(sessionId)) as any;
+      if (count && Number(count.count) >= session.max_participants) {
+        await interaction.reply({
+          content: `🔴 Désolé, la session **${session.name}** est désormais complète (${count.count}/${session.max_participants}).`,
+          ephemeral: true
+        });
+        return;
+      }
+    }
+  } else if (event.max_participants && event.max_participants > 0) {
+    const count = (await db.prepare('SELECT COUNT(*) as count FROM event_participants WHERE event_id = ? AND status = \'registered\'').get(eventId)) as any;
+    if (count && Number(count.count) >= event.max_participants) {
+      await interaction.reply({
+        content: `🔴 Désolé, cet événement a atteint son quota maximal de places (${count.count}/${event.max_participants}).`,
+        ephemeral: true
+      });
+      return;
+    }
+  }
+
+  const modal = new ModalBuilder()
+    .setCustomId(`cortex_ev_modal:${eventId}:${sessionId}`)
+    .setTitle(`Réservation : ${event.title}`.slice(0, 45));
+
+  const firstNameInput = new TextInputBuilder()
+    .setCustomId('ev_first_name')
+    .setLabel('Prénom :')
+    .setStyle(TextInputStyle.Short)
+    .setPlaceholder('Ex : Amine, Sarah, Mohamed...')
+    .setMinLength(2)
+    .setMaxLength(50)
+    .setRequired(true);
+
+  const lastNameInput = new TextInputBuilder()
+    .setCustomId('ev_last_name')
+    .setLabel('Nom de famille :')
+    .setStyle(TextInputStyle.Short)
+    .setPlaceholder('Ex : Benali, Kaci, Mansouri...')
+    .setMinLength(2)
+    .setMaxLength(50)
+    .setRequired(true);
+
+  const emailInput = new TextInputBuilder()
+    .setCustomId('ev_email')
+    .setLabel('Adresse Email :')
+    .setStyle(TextInputStyle.Short)
+    .setPlaceholder('Ex : votre.email@domaine.com')
+    .setMinLength(5)
+    .setMaxLength(100)
+    .setRequired(true);
+
+  const notesInput = new TextInputBuilder()
+    .setCustomId('ev_notes')
+    .setLabel('Remarques / Questions éventuelles :')
+    .setStyle(TextInputStyle.Paragraph)
+    .setPlaceholder('Ex : Intérêt particulier, besoins spécifiques ou matériel apporté (optionnel)...')
+    .setMaxLength(500)
+    .setRequired(false);
+
+  modal.addComponents(
+    new ActionRowBuilder<TextInputBuilder>().addComponents(firstNameInput),
+    new ActionRowBuilder<TextInputBuilder>().addComponents(lastNameInput),
+    new ActionRowBuilder<TextInputBuilder>().addComponents(emailInput),
+    new ActionRowBuilder<TextInputBuilder>().addComponents(notesInput)
+  );
+
+  await interaction.showModal(modal);
+}
+
+/**
+ * Traite la soumission du modal de réservation d'événement
+ */
+export async function handleEventModalSubmit(interaction: ModalSubmitInteraction) {
+  if (!interaction.guild) return;
+
+  const raw = interaction.customId.startsWith('cortex_ev_modal:')
+    ? interaction.customId.replace('cortex_ev_modal:', '')
+    : interaction.customId.replace('cortex_ev_modal_', '');
+
+  let eventId = '';
+  let sessionId = 'main';
+
+  if (raw.includes(':')) {
+    const parts = raw.split(':');
+    eventId = parts[0] || '';
+    sessionId = parts[1] || 'main';
+  } else {
+    const lastUnderscore = raw.lastIndexOf('_');
+    if (lastUnderscore !== -1) {
+      eventId = raw.substring(0, lastUnderscore);
+      sessionId = raw.substring(lastUnderscore + 1) || 'main';
+    } else {
+      eventId = raw;
+    }
+  }
+
+  if (!eventId) return;
+
+  const guildId = interaction.guild.id;
+  const event = (await db.prepare('SELECT * FROM events WHERE id = ? AND guild_id = ?').get(eventId, guildId)) as any;
+  if (!event) {
+    await interaction.reply({ content: '❌ Événement introuvable.', ephemeral: true });
+    return;
+  }
+
+  const firstName = interaction.fields.getTextInputValue('ev_first_name').trim();
+  const lastName = interaction.fields.getTextInputValue('ev_last_name').trim();
+  const email = interaction.fields.getTextInputValue('ev_email').trim();
+  const notes = interaction.fields.getTextInputValue('ev_notes')?.trim() || null;
+
+  // Vérifier quota une deuxième fois pour éviter race condition
+  if (sessionId && sessionId !== 'main') {
+    const session = (await db.prepare('SELECT * FROM event_sessions WHERE id = ? AND event_id = ?').get(sessionId, eventId)) as any;
+    if (session && session.max_participants > 0) {
+      const count = (await db.prepare('SELECT COUNT(*) as count FROM event_participants WHERE session_id = ? AND status = \'registered\'').get(sessionId)) as any;
+      if (count && Number(count.count) >= session.max_participants) {
+        await interaction.reply({
+          content: `🔴 Désolé, la session **${session.name}** vient de se remplir. Votre réservation n'a pas pu aboutir.`,
+          ephemeral: true
+        });
+        return;
+      }
+    }
+  } else if (event.max_participants && event.max_participants > 0) {
+    const count = (await db.prepare('SELECT COUNT(*) as count FROM event_participants WHERE event_id = ? AND status = \'registered\'').get(eventId)) as any;
+    if (count && Number(count.count) >= event.max_participants) {
+      await interaction.reply({
+        content: `🔴 Désolé, toutes les places pour cet événement viennent d'être réservées.`,
+        ephemeral: true
+      });
+      return;
+    }
+  }
+
+  const participantId = `ep_${Date.now().toString(36)}_${Math.random().toString(36).substring(2, 7)}`;
+  const finalSessionId = (sessionId && sessionId !== 'main') ? sessionId : null;
+
+  // Enregistrer le participant
+  await db.prepare(`
+    INSERT INTO event_participants (id, event_id, session_id, guild_id, user_id, first_name, last_name, email, notes, status, registered_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'registered', datetime('now'))
+    ON CONFLICT(event_id, user_id) DO UPDATE SET
+      session_id = excluded.session_id,
+      first_name = excluded.first_name,
+      last_name = excluded.last_name,
+      email = excluded.email,
+      notes = excluded.notes,
+      status = 'registered',
+      registered_at = datetime('now')
+  `).run(participantId, eventId, finalSessionId, guildId, interaction.user.id, firstName, lastName, email, notes);
+
+  // Mettre à jour table users
+  try {
+    await db.prepare(`
+      INSERT INTO users (id, username, discriminator, avatar)
+      VALUES (?, ?, ?, ?)
+      ON CONFLICT(id) DO UPDATE SET
+        username = excluded.username,
+        discriminator = excluded.discriminator,
+        avatar = excluded.avatar
+    `).run(interaction.user.id, interaction.user.username, interaction.user.discriminator || '0', interaction.user.avatar || null);
+  } catch {}
+
+  // Rôle Discord si configuré
+  let roleGiven = false;
+  if (event.participant_role_id) {
+    try {
+      const member = await interaction.guild.members.fetch(interaction.user.id).catch(() => null);
+      if (member) {
+        await member.roles.add(event.participant_role_id, `Cortex : Inscription événement ${event.title}`).catch(() => null);
+        roleGiven = true;
+      }
+    } catch {}
+  }
+
+  let sessionName = '';
+  if (finalSessionId) {
+    const sess = (await db.prepare('SELECT name FROM event_sessions WHERE id = ?').get(finalSessionId)) as any;
+    if (sess) sessionName = ` (Session : **${sess.name}**)`;
+  }
+
+  // Confirmation immédiate à l'utilisateur
+  const confirmEmbed = new EmbedBuilder()
+    .setTitle(`🎟️ Inscription Validée : ${event.title}`)
+    .setColor(0x10B981)
+    .setDescription(`Félicitations **${firstName} ${lastName}** ! Votre place est réservée avec succès${sessionName}.`)
+    .addFields(
+      { name: '👤 Participant', value: `${firstName} ${lastName} (${email})`, inline: true },
+      { name: '📍 Lieu', value: event.location, inline: true },
+      { name: '⏰ Date', value: `<t:${Math.floor(new Date(event.scheduled_start_time).getTime() / 1000)}:F>`, inline: false }
+    )
+    .setFooter({ text: 'CORTEX Scientific Club • Conservez cet email pour vos rappels' })
+    .setTimestamp();
+
+  if (roleGiven) {
+    confirmEmbed.addFields({ name: '🏷️ Rôle Discord', value: 'Votre rôle participant vous a été attribué sur le serveur.', inline: false });
+  }
+
+  await interaction.reply({ embeds: [confirmEmbed], ephemeral: true });
+
+  // Mettre à jour le message Discord en direct pour refléter le nouveau nombre de places !
+  await syncEventDiscordMessage(interaction.guild, eventId);
+}
+
+/**
+ * Traite la désinscription / libération d'une place par un membre
+ */
+export async function handleEventCancellation(interaction: ButtonInteraction, eventId: string) {
+  if (!interaction.guild) return;
+
+  const guildId = interaction.guild.id;
+  const event = (await db.prepare('SELECT * FROM events WHERE id = ? AND guild_id = ?').get(eventId, guildId)) as any;
+  if (!event) {
+    await interaction.reply({ content: '❌ Événement introuvable.', ephemeral: true });
+    return;
+  }
+
+  if (event.allow_cancellation === false || event.allow_cancellation === 0) {
+    await interaction.reply({
+      content: '⛔ Pour cet événement, les réservations sont fermes et définitives (places non libérables).',
+      ephemeral: true
+    });
+    return;
+  }
+
+  const existing = (await db.prepare('SELECT * FROM event_participants WHERE event_id = ? AND user_id = ? AND status = \'registered\'').get(eventId, interaction.user.id)) as any;
+  if (!existing) {
+    await interaction.reply({
+      content: 'ℹ️ Vous n\'avez aucune réservation active pour cet événement.',
+      ephemeral: true
+    });
+    return;
+  }
+
+  // Supprimer / marquer annulé
+  await db.prepare('DELETE FROM event_participants WHERE event_id = ? AND user_id = ?').run(eventId, interaction.user.id);
+
+  // Retirer rôle Discord si configuré
+  if (event.participant_role_id) {
+    try {
+      const member = await interaction.guild.members.fetch(interaction.user.id).catch(() => null);
+      if (member) {
+        await member.roles.remove(event.participant_role_id, 'Cortex : Annulation inscription événement').catch(() => null);
+      }
+    } catch {}
+  }
+
+  await interaction.reply({
+    content: `✅ Votre réservation pour **${event.title}** a bien été annulée. Votre place a été immédiatement remise à disposition d'autres membres.`,
+    ephemeral: true
+  });
+
+  // Mettre à jour le message Discord en direct pour que la place apparaisse libre !
+  await syncEventDiscordMessage(interaction.guild, eventId);
+}

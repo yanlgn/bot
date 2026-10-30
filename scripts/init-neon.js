@@ -1,7 +1,14 @@
 import pg from 'pg';
+import dotenv from 'dotenv';
+dotenv.config();
+
 const { Pool } = pg;
 
-const connectionString = process.env.DATABASE_URL || 'postgresql://neondb_owner:npg_G5xW4efCHtDL@ep-polished-sunset-ba16mybc-pooler.c-8.eu-central-1.aws.neon.tech/neondb?sslmode=require';
+const connectionString = process.env.DATABASE_URL;
+if (!connectionString) {
+  console.error('❌ Erreur: la variable d\'environnement DATABASE_URL est requise.');
+  process.exit(1);
+}
 
 const pool = new Pool({
   connectionString,
@@ -133,6 +140,9 @@ const schema = `
     department_id TEXT NOT NULL,
     guild_id TEXT NOT NULL,
     user_id TEXT NOT NULL,
+    first_name TEXT,
+    last_name TEXT,
+    email TEXT,
     role TEXT CHECK(role IN ('leader', 'deputy', 'member')) DEFAULT 'member',
     status TEXT CHECK(status IN ('pending', 'approved', 'rejected')) DEFAULT 'approved',
     motivation TEXT,
@@ -144,6 +154,10 @@ const schema = `
     PRIMARY KEY (department_id, user_id),
     FOREIGN KEY (department_id) REFERENCES departments(id) ON DELETE CASCADE
   );
+
+  ALTER TABLE department_members ADD COLUMN IF NOT EXISTS first_name TEXT;
+  ALTER TABLE department_members ADD COLUMN IF NOT EXISTS last_name TEXT;
+  ALTER TABLE department_members ADD COLUMN IF NOT EXISTS email TEXT;
 
   CREATE TABLE IF NOT EXISTS projects (
     id TEXT PRIMARY KEY,
@@ -174,25 +188,65 @@ const schema = `
     description TEXT NOT NULL,
     type TEXT CHECK(type IN ('conference', 'workshop', 'competition', 'field_trip', 'hackathon', 'training')) NOT NULL,
     scheduled_start_time TIMESTAMPTZ NOT NULL,
+    end_time TIMESTAMPTZ,
     location TEXT NOT NULL,
     speaker TEXT,
     max_participants INTEGER,
     target_audience TEXT,
+    is_recurring BOOLEAN DEFAULT FALSE,
+    recurrence_pattern TEXT,
+    allow_cancellation BOOLEAN DEFAULT TRUE,
     status TEXT CHECK(status IN ('draft', 'published', 'cancelled', 'completed')) DEFAULT 'published',
     channel_id TEXT,
+    discord_message_id TEXT,
     participant_role_id TEXT,
     created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
   );
 
+  ALTER TABLE events ADD COLUMN IF NOT EXISTS end_time TIMESTAMPTZ;
+  ALTER TABLE events ADD COLUMN IF NOT EXISTS is_recurring BOOLEAN DEFAULT FALSE;
+  ALTER TABLE events ADD COLUMN IF NOT EXISTS recurrence_pattern TEXT;
+  ALTER TABLE events ADD COLUMN IF NOT EXISTS allow_cancellation BOOLEAN DEFAULT TRUE;
+  ALTER TABLE events ADD COLUMN IF NOT EXISTS discord_message_id TEXT;
+
+  CREATE TABLE IF NOT EXISTS event_sessions (
+    id TEXT PRIMARY KEY,
+    event_id TEXT NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+    guild_id TEXT NOT NULL,
+    name TEXT NOT NULL,
+    description TEXT,
+    scheduled_start_time TIMESTAMPTZ,
+    scheduled_end_time TIMESTAMPTZ,
+    max_participants INTEGER DEFAULT 0,
+    created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+  );
+  CREATE INDEX IF NOT EXISTS idx_sessions_event ON event_sessions(event_id);
+
   CREATE TABLE IF NOT EXISTS event_participants (
-    event_id TEXT NOT NULL,
+    id TEXT PRIMARY KEY,
+    event_id TEXT NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+    session_id TEXT,
+    guild_id TEXT NOT NULL,
     user_id TEXT NOT NULL,
+    first_name TEXT NOT NULL,
+    last_name TEXT NOT NULL,
+    email TEXT NOT NULL,
+    notes TEXT,
+    status TEXT CHECK(status IN ('registered', 'cancelled')) DEFAULT 'registered',
     registered_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
     attended BOOLEAN DEFAULT FALSE,
-    PRIMARY KEY (event_id, user_id),
-    FOREIGN KEY (event_id) REFERENCES events(id) ON DELETE CASCADE
+    UNIQUE(event_id, user_id)
   );
+
+  ALTER TABLE event_participants ADD COLUMN IF NOT EXISTS id TEXT;
+  ALTER TABLE event_participants ADD COLUMN IF NOT EXISTS session_id TEXT;
+  ALTER TABLE event_participants ADD COLUMN IF NOT EXISTS guild_id TEXT;
+  ALTER TABLE event_participants ADD COLUMN IF NOT EXISTS first_name TEXT;
+  ALTER TABLE event_participants ADD COLUMN IF NOT EXISTS last_name TEXT;
+  ALTER TABLE event_participants ADD COLUMN IF NOT EXISTS email TEXT;
+  ALTER TABLE event_participants ADD COLUMN IF NOT EXISTS notes TEXT;
+  ALTER TABLE event_participants ADD COLUMN IF NOT EXISTS status TEXT DEFAULT 'registered';
 
   CREATE TABLE IF NOT EXISTS resources (
     id TEXT PRIMARY KEY,
@@ -211,6 +265,9 @@ const schema = `
     id TEXT PRIMARY KEY,
     guild_id TEXT NOT NULL,
     user_id TEXT NOT NULL,
+    first_name TEXT,
+    last_name TEXT,
+    email TEXT,
     study_field TEXT NOT NULL,
     motivation TEXT NOT NULL,
     interests TEXT DEFAULT '[]',
@@ -223,6 +280,9 @@ const schema = `
     created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
   );
 
+  ALTER TABLE candidatures ADD COLUMN IF NOT EXISTS first_name TEXT;
+  ALTER TABLE candidatures ADD COLUMN IF NOT EXISTS last_name TEXT;
+  ALTER TABLE candidatures ADD COLUMN IF NOT EXISTS email TEXT;
   ALTER TABLE candidatures ADD COLUMN IF NOT EXISTS availability TEXT;
   ALTER TABLE candidatures ADD COLUMN IF NOT EXISTS reviewed_at TIMESTAMPTZ;
   ALTER TABLE candidatures ADD COLUMN IF NOT EXISTS discord_message_id TEXT;

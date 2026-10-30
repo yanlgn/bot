@@ -1,11 +1,12 @@
 import pg from 'pg';
 const { Pool } = pg;
 
-export const DEFAULT_NEON_DATABASE_URL =
-  'postgresql://neondb_owner:npg_G5xW4efCHtDL@ep-polished-sunset-ba16mybc-pooler.c-8.eu-central-1.aws.neon.tech/neondb?sslmode=require';
-
 export function getDatabaseUrl(): string {
-  return process.env.DATABASE_URL || DEFAULT_NEON_DATABASE_URL;
+  const url = process.env.DATABASE_URL;
+  if (!url) {
+    throw new Error('DATABASE_URL environment variable is required');
+  }
+  return url;
 }
 
 export function toPgSql(sql: string): string {
