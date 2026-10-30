@@ -1,12 +1,12 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth, UserGuild } from '../context/AuthContext';
-import { Server, ArrowRight, ShieldAlert, Plus, RefreshCw } from 'lucide-react';
+import { Server, ArrowRight, ShieldAlert, Plus, RefreshCw, LogOut } from 'lucide-react';
 
 const CORTEX_CLIENT_ID = '1350228159005724772';
 
 export const GuildSelect: React.FC = () => {
-  const { user, setActiveGuildId, refreshUser, loading } = useAuth();
+  const { user, setActiveGuildId, refreshUser, logout, loading } = useAuth();
   const navigate = useNavigate();
 
   React.useEffect(() => {
@@ -58,14 +58,21 @@ export const GuildSelect: React.FC = () => {
           <p className="text-gray-400 text-xs sm:text-sm max-w-lg mx-auto">
             Gérez vos pôles scientifiques, événements, rôles et projets depuis le tableau de bord Cortex.
           </p>
-          <div className="mt-3 flex justify-center">
+          <div className="mt-3 flex items-center justify-center gap-2">
             <button
               onClick={() => refreshUser()}
               disabled={loading}
-              className="inline-flex items-center text-xs text-gray-400 hover:text-white transition px-3 py-1 rounded-md bg-[#16161D] border border-[#242430] hover:border-[#E5092E]"
+              className="inline-flex items-center text-xs text-gray-400 hover:text-white transition px-3 py-1.5 rounded-lg bg-[#16161D] border border-[#242430] hover:border-[#E5092E]"
             >
               <RefreshCw className={`w-3 h-3 mr-1.5 ${loading ? 'animate-spin' : ''}`} />
               Actualiser la liste
+            </button>
+            <button
+              onClick={() => logout()}
+              className="inline-flex items-center text-xs text-gray-400 hover:text-red-400 transition px-3 py-1.5 rounded-lg bg-[#16161D] border border-[#242430] hover:border-red-500/50"
+            >
+              <LogOut className="w-3 h-3 mr-1.5" />
+              Se déconnecter
             </button>
           </div>
         </div>
@@ -77,17 +84,26 @@ export const GuildSelect: React.FC = () => {
             </div>
             <h2 className="text-lg font-bold text-white mb-2">Aucun serveur administrable détecté</h2>
             <p className="text-xs sm:text-sm text-gray-400 max-w-md mx-auto mb-6 leading-relaxed">
-              Pour administrer un club avec Cortex, vous devez posséder la permission <strong>Gérer le serveur</strong> ou <strong>Administrateur</strong> sur votre serveur Discord.
+              Pour administrer un club avec Cortex, vous devez posséder la permission <strong>Gérer le serveur</strong> ou <strong>Administrateur</strong> sur votre serveur Discord. Si vos rôles ou vos autorisations viennent de changer, reconnectez-vous pour synchroniser vos accès Discord.
             </p>
-            <a
-              href={`https://discord.com/oauth2/authorize?client_id=${CORTEX_CLIENT_ID}&scope=bot%20applications.commands&permissions=8`}
-              target="_blank"
-              rel="noreferrer"
-              className="inline-flex items-center px-6 py-3 text-sm font-bold text-white bg-[#E5092E] hover:bg-[#CC0727] rounded-xl transition shadow-lg shadow-[#E5092E]/25 hover:scale-[1.02] active:scale-[0.98]"
-            >
-              <Plus className="w-4 h-4 mr-2" />
-              Inviter le bot Cortex sur un serveur
-            </a>
+            <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
+              <a
+                href={`https://discord.com/oauth2/authorize?client_id=${CORTEX_CLIENT_ID}&scope=bot%20applications.commands&permissions=8`}
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex items-center px-6 py-3 text-sm font-bold text-white bg-[#E5092E] hover:bg-[#CC0727] rounded-xl transition shadow-lg shadow-[#E5092E]/25 hover:scale-[1.02] active:scale-[0.98]"
+              >
+                <Plus className="w-4 h-4 mr-2" />
+                Inviter le bot Cortex
+              </a>
+              <button
+                onClick={() => logout()}
+                className="inline-flex items-center px-5 py-3 text-sm font-semibold text-gray-200 hover:text-white bg-[#1A1A22] hover:bg-[#22222E] border border-[#2E2E3C] rounded-xl transition hover:scale-[1.02] active:scale-[0.98]"
+              >
+                <RefreshCw className="w-4 h-4 mr-2" />
+                Se reconnecter avec Discord
+              </button>
+            </div>
           </div>
         ) : (
           <div className="space-y-6">
