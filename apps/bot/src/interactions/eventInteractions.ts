@@ -82,7 +82,9 @@ export async function buildEventMessagePayload(guildId: string, eventId: string)
       }
 
       let timeInfo = '';
-      if (s.scheduled_start_time) {
+      if (s.day_of_week && s.start_time) {
+        timeInfo = ` • 🗓️ **Tous les ${s.day_of_week}s à ${s.start_time}${s.end_time ? ` - ${s.end_time}` : ''}**`;
+      } else if (s.scheduled_start_time) {
         const sTs = Math.floor(new Date(s.scheduled_start_time).getTime() / 1000);
         timeInfo = ` • <t:${sTs}:t>`;
       }
@@ -138,11 +140,17 @@ export async function buildEventMessagePayload(guildId: string, eventId: string)
           const countS = Number(s.participant_count) || 0;
           const isFull = maxS > 0 && countS >= maxS;
           const remaining = maxS > 0 ? Math.max(0, maxS - countS) : null;
+          const scheduleDesc = s.day_of_week && s.start_time
+            ? `${s.day_of_week} ${s.start_time} • `
+            : '';
+          const quotaDesc = isFull
+            ? 'Session complète'
+            : (remaining !== null ? `${remaining} place(s) disponible(s)` : 'Places illimitées');
 
           return {
             label: `${isFull ? '⛔ ' : ''}${s.name}`.slice(0, 100),
             value: s.id,
-            description: (isFull ? 'Session complète' : (remaining !== null ? `${remaining} place(s) disponible(s)` : 'Places illimitées')).slice(0, 100),
+            description: `${scheduleDesc}${quotaDesc}`.slice(0, 100),
             emoji: isFull ? '🔴' : '🎟️'
           };
         })
@@ -159,11 +167,14 @@ export async function buildEventMessagePayload(guildId: string, eventId: string)
       const maxS = s.max_participants ? Number(s.max_participants) : 0;
       const countS = Number(s.participant_count) || 0;
       const isFull = maxS > 0 && countS >= maxS;
+      const scheduleShort = s.day_of_week && s.start_time
+        ? ` (${s.day_of_week.slice(0, 3)}. ${s.start_time})`
+        : '';
 
       buttonRow.addComponents(
         new ButtonBuilder()
           .setCustomId(`cortex_ev_join:${event.id}:${s.id}`)
-          .setLabel(`Réserver : ${s.name}`.slice(0, 80))
+          .setLabel(`Réserver : ${s.name}${scheduleShort}`.slice(0, 80))
           .setEmoji(isFull ? '🔴' : '🎟️')
           .setStyle(isFull ? ButtonStyle.Secondary : ButtonStyle.Primary)
           .setDisabled(isFull)

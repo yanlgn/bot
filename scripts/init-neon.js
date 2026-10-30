@@ -209,6 +209,8 @@ const schema = `
   ALTER TABLE events ADD COLUMN IF NOT EXISTS recurrence_pattern TEXT;
   ALTER TABLE events ADD COLUMN IF NOT EXISTS allow_cancellation BOOLEAN DEFAULT TRUE;
   ALTER TABLE events ADD COLUMN IF NOT EXISTS discord_message_id TEXT;
+  ALTER TABLE events ADD COLUMN IF NOT EXISTS recurrence_day TEXT;
+  ALTER TABLE events ADD COLUMN IF NOT EXISTS recurrence_time TEXT;
 
   CREATE TABLE IF NOT EXISTS event_sessions (
     id TEXT PRIMARY KEY,
@@ -216,11 +218,17 @@ const schema = `
     guild_id TEXT NOT NULL,
     name TEXT NOT NULL,
     description TEXT,
+    day_of_week TEXT,
+    start_time TEXT,
+    end_time TEXT,
     scheduled_start_time TIMESTAMPTZ,
     scheduled_end_time TIMESTAMPTZ,
     max_participants INTEGER DEFAULT 0,
     created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
   );
+  ALTER TABLE event_sessions ADD COLUMN IF NOT EXISTS day_of_week TEXT;
+  ALTER TABLE event_sessions ADD COLUMN IF NOT EXISTS start_time TEXT;
+  ALTER TABLE event_sessions ADD COLUMN IF NOT EXISTS end_time TEXT;
   CREATE INDEX IF NOT EXISTS idx_sessions_event ON event_sessions(event_id);
 
   CREATE TABLE IF NOT EXISTS event_participants (

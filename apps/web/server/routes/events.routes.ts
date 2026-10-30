@@ -35,6 +35,8 @@ eventsRouter.get('/', requireAuth, requireGuildAdmin, async (req: Request, res: 
         e.target_audience as "targetAudience",
         e.is_recurring as "isRecurring",
         e.recurrence_pattern as "recurrencePattern",
+        e.recurrence_day as "recurrenceDay",
+        e.recurrence_time as "recurrenceTime",
         e.allow_cancellation as "allowCancellation",
         e.status,
         e.channel_id as "channelId",
@@ -64,6 +66,9 @@ eventsRouter.get('/', requireAuth, requireGuildAdmin, async (req: Request, res: 
           s.guild_id as "guildId",
           s.name,
           s.description,
+          s.day_of_week as "dayOfWeek",
+          s.start_time as "startTime",
+          s.end_time as "endTime",
           s.scheduled_start_time as "scheduledStartTime",
           s.scheduled_end_time as "scheduledEndTime",
           s.max_participants as "maxParticipants",
@@ -121,10 +126,10 @@ eventsRouter.post('/', requireAuth, requireGuildAdmin, validateBody(CreateEventS
       INSERT INTO events (
         id, guild_id, title, description, type, scheduled_start_time, end_time,
         location, speaker, max_participants, target_audience,
-        is_recurring, recurrence_pattern, allow_cancellation,
+        is_recurring, recurrence_pattern, recurrence_day, recurrence_time, allow_cancellation,
         status, channel_id, participant_role_id, created_at, updated_at
       )
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'published', ?, ?, datetime('now'), datetime('now'))
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'published', ?, ?, datetime('now'), datetime('now'))
     `).run(
       eventId,
       guild.id,
@@ -139,6 +144,8 @@ eventsRouter.post('/', requireAuth, requireGuildAdmin, validateBody(CreateEventS
       req.body.targetAudience || null,
       req.body.isRecurring ? true : false,
       req.body.recurrencePattern || null,
+      req.body.recurrenceDay || null,
+      req.body.recurrenceTime || null,
       req.body.allowCancellation !== undefined ? req.body.allowCancellation : true,
       req.body.channelId || null,
       participantRoleId
@@ -150,14 +157,17 @@ eventsRouter.post('/', requireAuth, requireGuildAdmin, validateBody(CreateEventS
         const sessionId = sess.id || `sess_${Date.now().toString(36)}_${Math.random().toString(36).substring(2, 6)}`;
         await db.prepare(`
           INSERT INTO event_sessions (
-            id, event_id, guild_id, name, description, scheduled_start_time, scheduled_end_time, max_participants, created_at
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
+            id, event_id, guild_id, name, description, day_of_week, start_time, end_time, scheduled_start_time, scheduled_end_time, max_participants, created_at
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
         `).run(
           sessionId,
           eventId,
           guild.id,
           sess.name,
           sess.description || null,
+          sess.dayOfWeek || null,
+          sess.startTime || null,
+          sess.endTime || null,
           sess.scheduledStartTime || null,
           sess.scheduledEndTime || null,
           sess.maxParticipants || 0
@@ -224,6 +234,8 @@ eventsRouter.put('/:eventId', requireAuth, requireGuildAdmin, validateBody(Updat
       targetAudience: 'target_audience',
       isRecurring: 'is_recurring',
       recurrencePattern: 'recurrence_pattern',
+      recurrenceDay: 'recurrence_day',
+      recurrenceTime: 'recurrence_time',
       allowCancellation: 'allow_cancellation',
       status: 'status',
       channelId: 'channel_id'
@@ -257,15 +269,38 @@ eventsRouter.put('/:eventId', requireAuth, requireGuildAdmin, validateBody(Updat
         if (sess.id) {
           await db.prepare(`
             UPDATE event_sessions
-            SET name = ?, description = ?, scheduled_start_time = ?, scheduled_end_time = ?, max_participants = ?
+            SET name = ?, description = ?, day_of_week = ?, start_time = ?, end_time = ?, scheduled_start_time = ?, scheduled_end_time = ?, max_participants = ?
             WHERE id = ? AND event_id = ?
-          `).run(sess.name, sess.description || null, sess.scheduledStartTime || null, sess.scheduledEndTime || null, sess.maxParticipants || 0, sess.id, eventId);
+          `).run(
+            sess.name,
+            sess.description || null,
+            sess.dayOfWeek || null,
+            sess.startTime || null,
+            sess.endTime || null,
+            sess.scheduledStartTime || null,
+            sess.scheduledEndTime || null,
+            sess.maxParticipants || 0,
+            sess.id,
+            eventId
+          );
         } else {
           const newSessId = `sess_${Date.now().toString(36)}_${Math.random().toString(36).substring(2, 6)}`;
           await db.prepare(`
-            INSERT INTO event_sessions (id, event_id, guild_id, name, description, scheduled_start_time, scheduled_end_time, max_participants, created_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
-          `).run(newSessId, eventId, guildId, sess.name, sess.description || null, sess.scheduledStartTime || null, sess.scheduledEndTime || null, sess.maxParticipants || 0);
+            INSERT INTO event_sessions (id, event_id, guild_id, name, description, day_of_week, start_time, end_time, scheduled_start_time, scheduled_end_time, max_participants, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
+          `).run(
+            newSessId,
+            eventId,
+            guildId,
+            sess.name,
+            sess.description || null,
+            sess.dayOfWeek || null,
+            sess.startTime || null,
+            sess.endTime || null,
+            sess.scheduledStartTime || null,
+            sess.scheduledEndTime || null,
+            sess.maxParticipants || 0
+          );
         }
       }
     }

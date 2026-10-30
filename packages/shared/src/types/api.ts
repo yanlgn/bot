@@ -18,6 +18,9 @@ export interface EventSessionRecord {
   guildId: string;
   name: string;
   description?: string | null;
+  dayOfWeek?: string | null;
+  startTime?: string | null;
+  endTime?: string | null;
   scheduledStartTime?: string | null;
   scheduledEndTime?: string | null;
   maxParticipants?: number | null;
@@ -39,6 +42,8 @@ export interface EventRecord {
   targetAudience?: string | null;
   isRecurring?: boolean;
   recurrencePattern?: string | null;
+  recurrenceDay?: string | null;
+  recurrenceTime?: string | null;
   allowCancellation?: boolean;
   status: 'draft' | 'published' | 'cancelled' | 'completed';
   channelId?: string | null;

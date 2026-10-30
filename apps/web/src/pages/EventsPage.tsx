@@ -32,8 +32,55 @@ interface EventSessionItem {
   id?: string;
   name: string;
   description?: string;
+  dayOfWeek?: string;
+  startTime?: string;
+  endTime?: string;
   scheduledStartTime?: string;
+  scheduledEndTime?: string;
   maxParticipants?: number | '';
+}
+
+const DAYS_OF_WEEK = [
+  'Lundi',
+  'Mardi',
+  'Mercredi',
+  'Jeudi',
+  'Vendredi',
+  'Samedi',
+  'Dimanche'
+];
+
+function getNextDateForDayOfWeek(dayName: string, timeStr?: string): Date {
+  const dayMap: Record<string, number> = {
+    dimanche: 0,
+    lundi: 1,
+    mardi: 2,
+    mercredi: 3,
+    jeudi: 4,
+    vendredi: 5,
+    samedi: 6
+  };
+  const targetDay = dayMap[dayName.toLowerCase()] ?? 6;
+  const now = new Date();
+  const result = new Date(now);
+
+  let hours = 14;
+  let minutes = 0;
+  if (timeStr && timeStr.includes(':')) {
+    const parts = timeStr.split(':');
+    hours = parseInt(parts[0] || '14', 10);
+    minutes = parseInt(parts[1] || '0', 10);
+  }
+
+  result.setHours(hours, minutes, 0, 0);
+
+  const currentDay = now.getDay();
+  let daysToAdd = (targetDay - currentDay + 7) % 7;
+  if (daysToAdd === 0 && result <= now) {
+    daysToAdd = 7;
+  }
+  result.setDate(result.getDate() + daysToAdd);
+  return result;
 }
 
 export const EventsPage: React.FC = () => {
@@ -58,14 +105,17 @@ export const EventsPage: React.FC = () => {
   const [targetAudience, setTargetAudience] = useState('');
   const [channelId, setChannelId] = useState('');
   const [isRecurring, setIsRecurring] = useState(false);
-  const [recurrencePattern, setRecurrencePattern] = useState('Hebdomadaire (Tous les Jeudis)');
+  const [recurrenceDay, setRecurrenceDay] = useState('Samedi');
+  const [recurrenceTime, setRecurrenceTime] = useState('14:00');
+  const [recurrenceEndTime, setRecurrenceEndTime] = useState('');
+  const [recurrencePattern, setRecurrencePattern] = useState('Hebdomadaire (Tous les Samedis)');
   const [hasLimit, setHasLimit] = useState(true);
   const [maxParticipants, setMaxParticipants] = useState<number | ''>(15);
   const [allowCancellation, setAllowCancellation] = useState(true);
   const [hasMultipleSessions, setHasMultipleSessions] = useState(false);
   const [sessions, setSessions] = useState<EventSessionItem[]>([
-    { name: 'Session 1 (Matin 10h00 - 12h00)', maxParticipants: 15 },
-    { name: 'Session 2 (Après-midi 14h00 - 16h00)', maxParticipants: 15 }
+    { name: 'Session 1', dayOfWeek: 'Vendredi', startTime: '16:00', endTime: '17:30', maxParticipants: 15 },
+    { name: 'Session 2', dayOfWeek: 'Samedi', startTime: '14:00', endTime: '15:30', maxParticipants: 15 }
   ]);
 
   // Fetch Events
@@ -157,14 +207,17 @@ export const EventsPage: React.FC = () => {
     setTargetAudience('');
     setChannelId('');
     setIsRecurring(false);
-    setRecurrencePattern('Hebdomadaire (Tous les Jeudis)');
+    setRecurrenceDay('Samedi');
+    setRecurrenceTime('14:00');
+    setRecurrenceEndTime('');
+    setRecurrencePattern('Hebdomadaire (Tous les Samedis)');
     setHasLimit(true);
     setMaxParticipants(15);
     setAllowCancellation(true);
     setHasMultipleSessions(false);
     setSessions([
-      { name: 'Session 1 (Matin 10h00 - 12h00)', maxParticipants: 15 },
-      { name: 'Session 2 (Après-midi 14h00 - 16h00)', maxParticipants: 15 }
+      { name: 'Session 1', dayOfWeek: 'Vendredi', startTime: '16:00', endTime: '17:30', maxParticipants: 15 },
+      { name: 'Session 2', dayOfWeek: 'Samedi', startTime: '14:00', endTime: '15:30', maxParticipants: 15 }
     ]);
   };
 
@@ -180,16 +233,24 @@ export const EventsPage: React.FC = () => {
     setTargetAudience(event.targetAudience || '');
     setChannelId(event.channelId || '');
     setIsRecurring(Boolean(event.isRecurring));
-    setRecurrencePattern(event.recurrencePattern || 'Hebdomadaire (Tous les Jeudis)');
+    setRecurrenceDay((event as any).recurrenceDay || 'Samedi');
+    setRecurrenceTime((event as any).recurrenceTime || '14:00');
+    setRecurrenceEndTime('');
+    setRecurrencePattern(event.recurrencePattern || 'Hebdomadaire');
     setHasLimit(event.maxParticipants !== null && event.maxParticipants !== undefined && event.maxParticipants > 0);
     setMaxParticipants(event.maxParticipants || '');
     setAllowCancellation(event.allowCancellation !== false);
 
     if (event.sessions && event.sessions.length > 0) {
       setHasMultipleSessions(true);
-      setSessions(event.sessions.map(s => ({
+      setSessions(event.sessions.map((s, idx) => ({
         id: s.id,
         name: s.name,
+        dayOfWeek: (s as any).dayOfWeek || (idx === 0 ? 'Vendredi' : 'Samedi'),
+        startTime: (s as any).startTime || '14:00',
+        endTime: (s as any).endTime || '',
+        scheduledStartTime: s.scheduledStartTime ? new Date(s.scheduledStartTime).toISOString().slice(0, 16) : '',
+        scheduledEndTime: s.scheduledEndTime ? new Date(s.scheduledEndTime).toISOString().slice(0, 16) : '',
         maxParticipants: s.maxParticipants || ''
       })));
     } else {
@@ -201,27 +262,75 @@ export const EventsPage: React.FC = () => {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
 
+    let computedStartTime = '';
+    let computedEndTime: string | null = null;
+    let computedPattern: string | null = null;
+
+    if (isRecurring) {
+      if (hasMultipleSessions && sessions.length > 0) {
+        const firstSess = sessions[0];
+        const nextFirst = getNextDateForDayOfWeek(firstSess.dayOfWeek || 'Samedi', firstSess.startTime || '14:00');
+        computedStartTime = nextFirst.toISOString();
+        computedPattern = `Chaque semaine (${sessions.map(s => `${s.name}: ${s.dayOfWeek || 'Samedi'} à ${s.startTime || '14:00'}`).join(' • ')})`;
+      } else {
+        const nextDate = getNextDateForDayOfWeek(recurrenceDay, recurrenceTime);
+        computedStartTime = nextDate.toISOString();
+        if (recurrenceEndTime) {
+          const nextEnd = getNextDateForDayOfWeek(recurrenceDay, recurrenceEndTime);
+          computedEndTime = nextEnd.toISOString();
+        }
+        computedPattern = `Tous les ${recurrenceDay}s à ${recurrenceTime}${recurrenceEndTime ? ` - ${recurrenceEndTime}` : ''}`;
+      }
+    } else {
+      computedStartTime = date ? new Date(date).toISOString() : new Date().toISOString();
+      computedEndTime = endDate ? new Date(endDate).toISOString() : null;
+      computedPattern = null;
+    }
+
     const formattedSessions = hasMultipleSessions
-      ? sessions.map(s => ({
-          id: s.id,
-          name: s.name,
-          maxParticipants: s.maxParticipants ? Number(s.maxParticipants) : 0
-        }))
+      ? sessions.map(s => {
+          let sStart: string | null = null;
+          let sEnd: string | null = null;
+          if (isRecurring) {
+            const nextSDate = getNextDateForDayOfWeek(s.dayOfWeek || 'Samedi', s.startTime || '14:00');
+            sStart = nextSDate.toISOString();
+            if (s.endTime) {
+              const nextSEnd = getNextDateForDayOfWeek(s.dayOfWeek || 'Samedi', s.endTime);
+              sEnd = nextSEnd.toISOString();
+            }
+          } else {
+            sStart = s.scheduledStartTime ? new Date(s.scheduledStartTime).toISOString() : null;
+            sEnd = s.scheduledEndTime ? new Date(s.scheduledEndTime).toISOString() : null;
+          }
+
+          return {
+            id: s.id,
+            name: s.name,
+            dayOfWeek: isRecurring ? (s.dayOfWeek || 'Samedi') : null,
+            startTime: isRecurring ? (s.startTime || '14:00') : null,
+            endTime: isRecurring ? (s.endTime || null) : null,
+            scheduledStartTime: sStart,
+            scheduledEndTime: sEnd,
+            maxParticipants: s.maxParticipants ? Number(s.maxParticipants) : 0
+          };
+        })
       : [];
 
     const payload = {
       title,
       type,
       description,
-      scheduledStartTime: new Date(date).toISOString(),
-      endTime: endDate ? new Date(endDate).toISOString() : null,
+      scheduledStartTime: computedStartTime,
+      endTime: computedEndTime,
       location,
       speaker: speaker || null,
       maxParticipants: hasLimit && maxParticipants ? Number(maxParticipants) : null,
       targetAudience: targetAudience || null,
       channelId: channelId || null,
       isRecurring,
-      recurrencePattern: isRecurring ? recurrencePattern : null,
+      recurrencePattern: computedPattern,
+      recurrenceDay: isRecurring ? recurrenceDay : null,
+      recurrenceTime: isRecurring ? recurrenceTime : null,
       allowCancellation,
       createParticipantRole: true,
       sessions: formattedSessions
@@ -237,7 +346,13 @@ export const EventsPage: React.FC = () => {
   const addSessionRow = () => {
     setSessions(prev => [
       ...prev,
-      { name: `Session ${prev.length + 1}`, maxParticipants: 15 }
+      {
+        name: `Session ${prev.length + 1}`,
+        dayOfWeek: 'Samedi',
+        startTime: '14:00',
+        endTime: '15:30',
+        maxParticipants: 15
+      }
     ]);
   };
 
@@ -424,7 +539,14 @@ export const EventsPage: React.FC = () => {
                       <div className="space-y-1">
                         {sessionsList.map(s => (
                           <div key={s.id} className="flex items-center justify-between p-1.5 bg-[#1A1A24] rounded-lg text-[11px] text-gray-300">
-                            <span className="truncate font-semibold">{s.name}</span>
+                            <div className="truncate min-w-0 pr-2">
+                              <span className="font-semibold text-gray-200">{s.name}</span>
+                              {(s as any).dayOfWeek && (s as any).startTime && (
+                                <span className="text-[10px] text-purple-400 font-medium ml-2">
+                                  ({(s as any).dayOfWeek} à {(s as any).startTime}{(s as any).endTime ? `-${(s as any).endTime}` : ''})
+                                </span>
+                              )}
+                            </div>
                             <span className="font-bold text-white shrink-0 ml-2">
                               {s.participantCount || 0}{s.maxParticipants ? `/${s.maxParticipants}` : ''}
                             </span>
@@ -561,50 +683,91 @@ export const EventsPage: React.FC = () => {
                 />
                 <span className="flex items-center">
                   <Repeat className="w-3.5 h-3.5 mr-1.5 text-purple-400" />
-                  Événement Récurrent (ex: chaque semaine, chaque mois)
+                  Événement Récurrent (hebdomadaire / par sessions)
                 </span>
               </label>
 
               {isRecurring ? (
-                <div>
-                  <label className="block text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-1">
-                    Fréquence / Périodicité
-                  </label>
-                  <input
-                    type="text"
-                    value={recurrencePattern}
-                    onChange={e => setRecurrencePattern(e.target.value)}
-                    placeholder="ex: Tous les Jeudis à 18h00, Tous les 15 jours..."
-                    className="w-full bg-[#121217] border border-[#2E2E3C] rounded-lg px-3 py-1.5 text-xs text-gray-100"
-                  />
-                </div>
-              ) : null}
+                hasMultipleSessions ? (
+                  <div className="p-2.5 bg-[#121217] rounded-lg border border-purple-500/20 text-xs text-purple-300">
+                    💡 <strong>Mode Multi-Sessions récurrent :</strong> Définissez le <strong>jour de la semaine</strong> et l'<strong>heure</strong> directement pour chaque session dans la section <em>« Multi-Sessions »</em> ci-dessous !
+                  </div>
+                ) : (
+                  <div className="space-y-2.5 pt-1">
+                    <div className="grid grid-cols-3 gap-2.5">
+                      <div>
+                        <label className="block text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-1">
+                          Jour de la semaine *
+                        </label>
+                        <select
+                          value={recurrenceDay}
+                          onChange={e => setRecurrenceDay(e.target.value)}
+                          className="w-full bg-[#121217] border border-[#2E2E3C] rounded-lg px-3 py-1.5 text-xs text-gray-100"
+                        >
+                          {DAYS_OF_WEEK.map(d => (
+                            <option key={d} value={d}>{d}</option>
+                          ))}
+                        </select>
+                      </div>
 
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-1">
-                    {isRecurring ? 'Prochaine session (Début) *' : 'Date & Heure de début *'}
-                  </label>
-                  <input
-                    type="datetime-local"
-                    required
-                    value={date}
-                    onChange={e => setDate(e.target.value)}
-                    className="w-full bg-[#121217] border border-[#2E2E3C] rounded-lg px-3 py-1.5 text-xs text-gray-100"
-                  />
+                      <div>
+                        <label className="block text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-1">
+                          Heure de début *
+                        </label>
+                        <input
+                          type="time"
+                          required
+                          value={recurrenceTime}
+                          onChange={e => setRecurrenceTime(e.target.value)}
+                          className="w-full bg-[#121217] border border-[#2E2E3C] rounded-lg px-3 py-1.5 text-xs text-gray-100"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-1">
+                          Heure de fin (opt.)
+                        </label>
+                        <input
+                          type="time"
+                          value={recurrenceEndTime}
+                          onChange={e => setRecurrenceEndTime(e.target.value)}
+                          className="w-full bg-[#121217] border border-[#2E2E3C] rounded-lg px-3 py-1.5 text-xs text-gray-100"
+                        />
+                      </div>
+                    </div>
+
+                    <p className="text-[11px] text-purple-300/80">
+                      📅 Cet événement se reproduira <strong>chaque {recurrenceDay} à {recurrenceTime}</strong>{recurrenceEndTime ? ` (jusqu'à ${recurrenceEndTime})` : ''} sans date figée.
+                    </p>
+                  </div>
+                )
+              ) : (
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-1">
+                      Date & Heure de début *
+                    </label>
+                    <input
+                      type="datetime-local"
+                      required
+                      value={date}
+                      onChange={e => setDate(e.target.value)}
+                      className="w-full bg-[#121217] border border-[#2E2E3C] rounded-lg px-3 py-1.5 text-xs text-gray-100"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-1">
+                      Date & Heure de fin (optionnel)
+                    </label>
+                    <input
+                      type="datetime-local"
+                      value={endDate}
+                      onChange={e => setEndDate(e.target.value)}
+                      className="w-full bg-[#121217] border border-[#2E2E3C] rounded-lg px-3 py-1.5 text-xs text-gray-100"
+                    />
+                  </div>
                 </div>
-                <div>
-                  <label className="block text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-1">
-                    Heure de fin (optionnel)
-                  </label>
-                  <input
-                    type="datetime-local"
-                    value={endDate}
-                    onChange={e => setEndDate(e.target.value)}
-                    className="w-full bg-[#121217] border border-[#2E2E3C] rounded-lg px-3 py-1.5 text-xs text-gray-100"
-                  />
-                </div>
-              </div>
+              )}
             </div>
 
             <div className="grid grid-cols-2 gap-3">
@@ -690,7 +853,7 @@ export const EventsPage: React.FC = () => {
                   />
                   <span className="flex items-center">
                     <Layers className="w-3.5 h-3.5 mr-1.5 text-amber-400" />
-                    Diviser en plusieurs sessions (ex: Speaking Circle 2 créneaux)
+                    Diviser en plusieurs sessions (ex: Speaking Circle avec plusieurs créneaux)
                   </span>
                 </label>
 
@@ -707,41 +870,112 @@ export const EventsPage: React.FC = () => {
               </div>
 
               {hasMultipleSessions && (
-                <div className="space-y-2 pt-1">
+                <div className="space-y-3 pt-1">
                   {sessions.map((sess, idx) => (
-                    <div key={idx} className="flex items-center space-x-2 bg-[#121217] p-2 rounded-lg border border-[#242430]">
-                      <input
-                        type="text"
-                        required
-                        value={sess.name}
-                        onChange={e => updateSessionRow(idx, 'name', e.target.value)}
-                        placeholder="Nom de la session (ex: Session Matin 10h)"
-                        className="flex-1 bg-transparent border-0 text-xs text-white focus:outline-none"
-                      />
-                      <div className="flex items-center space-x-1 shrink-0">
-                        <span className="text-[10px] text-gray-500 uppercase font-semibold">Max :</span>
+                    <div key={idx} className="bg-[#121217] p-2.5 rounded-xl border border-[#242430] space-y-2">
+                      <div className="flex items-center space-x-2">
                         <input
-                          type="number"
-                          min="0"
-                          value={sess.maxParticipants}
-                          onChange={e => updateSessionRow(idx, 'maxParticipants', e.target.value ? Number(e.target.value) : '')}
-                          placeholder="0 = illimité"
-                          className="w-16 bg-[#1A1A22] border border-[#2E2E3C] rounded px-2 py-1 text-xs text-white text-center"
+                          type="text"
+                          required
+                          value={sess.name}
+                          onChange={e => updateSessionRow(idx, 'name', e.target.value)}
+                          placeholder={`Nom session (ex: Session ${idx + 1} - Débutants)`}
+                          className="flex-1 bg-transparent border-0 text-xs font-bold text-white focus:outline-none"
                         />
+                        <div className="flex items-center space-x-1 shrink-0">
+                          <span className="text-[10px] text-gray-500 uppercase font-semibold">Max places :</span>
+                          <input
+                            type="number"
+                            min="0"
+                            value={sess.maxParticipants}
+                            onChange={e => updateSessionRow(idx, 'maxParticipants', e.target.value ? Number(e.target.value) : '')}
+                            placeholder="0 = illimité"
+                            className="w-16 bg-[#1A1A22] border border-[#2E2E3C] rounded px-2 py-1 text-xs text-white text-center font-bold"
+                          />
+                        </div>
+                        {sessions.length > 1 && (
+                          <button
+                            type="button"
+                            onClick={() => removeSessionRow(idx)}
+                            className="text-gray-500 hover:text-rose-400 p-1"
+                            title="Supprimer cette session"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        )}
                       </div>
-                      {sessions.length > 1 && (
-                        <button
-                          type="button"
-                          onClick={() => removeSessionRow(idx)}
-                          className="text-gray-500 hover:text-rose-400 p-1"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
+
+                      {/* Créneau spécifique pour chaque session */}
+                      {isRecurring ? (
+                        <div className="grid grid-cols-3 gap-2 pt-2 border-t border-[#1C1C26]">
+                          <div>
+                            <label className="block text-[9px] font-semibold text-gray-400 uppercase mb-0.5">
+                              Jour de la session *
+                            </label>
+                            <select
+                              value={sess.dayOfWeek || 'Samedi'}
+                              onChange={e => updateSessionRow(idx, 'dayOfWeek', e.target.value)}
+                              className="w-full bg-[#1A1A22] border border-[#2E2E3C] rounded px-2 py-1 text-xs text-gray-100"
+                            >
+                              {DAYS_OF_WEEK.map(d => (
+                                <option key={d} value={d}>{d}</option>
+                              ))}
+                            </select>
+                          </div>
+                          <div>
+                            <label className="block text-[9px] font-semibold text-gray-400 uppercase mb-0.5">
+                              Heure de début *
+                            </label>
+                            <input
+                              type="time"
+                              required
+                              value={sess.startTime || '14:00'}
+                              onChange={e => updateSessionRow(idx, 'startTime', e.target.value)}
+                              className="w-full bg-[#1A1A22] border border-[#2E2E3C] rounded px-2 py-1 text-xs text-gray-100"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-[9px] font-semibold text-gray-400 uppercase mb-0.5">
+                              Heure de fin (opt.)
+                            </label>
+                            <input
+                              type="time"
+                              value={sess.endTime || ''}
+                              onChange={e => updateSessionRow(idx, 'endTime', e.target.value)}
+                              className="w-full bg-[#1A1A22] border border-[#2E2E3C] rounded px-2 py-1 text-xs text-gray-100"
+                            />
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="grid grid-cols-2 gap-2 pt-2 border-t border-[#1C1C26]">
+                          <div>
+                            <label className="block text-[9px] font-semibold text-gray-400 uppercase mb-0.5">
+                              Date & Heure début (optionnel)
+                            </label>
+                            <input
+                              type="datetime-local"
+                              value={sess.scheduledStartTime || ''}
+                              onChange={e => updateSessionRow(idx, 'scheduledStartTime', e.target.value)}
+                              className="w-full bg-[#1A1A22] border border-[#2E2E3C] rounded px-2 py-1 text-xs text-gray-100"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-[9px] font-semibold text-gray-400 uppercase mb-0.5">
+                              Date & Heure fin (optionnel)
+                            </label>
+                            <input
+                              type="datetime-local"
+                              value={sess.scheduledEndTime || ''}
+                              onChange={e => updateSessionRow(idx, 'scheduledEndTime', e.target.value)}
+                              className="w-full bg-[#1A1A22] border border-[#2E2E3C] rounded px-2 py-1 text-xs text-gray-100"
+                            />
+                          </div>
+                        </div>
                       )}
                     </div>
                   ))}
                   <p className="text-[11px] text-gray-400 italic">
-                    Chaque session disposera de son propre quota et apparaîtra dans le menu déroulant Discord !
+                    Chaque session dispose de son propre jour, heure et quota de places sur Discord !
                   </p>
                 </div>
               )}
