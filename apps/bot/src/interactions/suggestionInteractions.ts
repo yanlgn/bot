@@ -44,7 +44,7 @@ export async function handleSuggestionButtonClick(interaction: ButtonInteraction
 
   const benefitsInput = new TextInputBuilder()
     .setCustomId('sug_benefits')
-    .setLabel('Bénéfices & Impact pour le club (optionnel) :')
+    .setLabel('Bénéfices & Impact pour le club :')
     .setStyle(TextInputStyle.Paragraph)
     .setPlaceholder('Qu\'est-ce que cela apportera aux membres ou au rayonnement du club ?')
     .setMaxLength(1000)

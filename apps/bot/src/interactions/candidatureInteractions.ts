@@ -76,7 +76,7 @@ export async function handleCandidatureButtonClick(interaction: ButtonInteractio
     .setCustomId('cand_motivation')
     .setLabel('Motivations, Domaines & Disponibilité :')
     .setStyle(TextInputStyle.Paragraph)
-    .setPlaceholder('Pourquoi rejoindre CORTEX, quels domaines vous passionnent (IA, Robotique, etc.) et votre temps disponible ?')
+    .setPlaceholder('Vos motivations pour rejoindre CORTEX, vos passions et votre temps disponible...')
     .setMinLength(10)
     .setMaxLength(1000)
     .setRequired(true);
