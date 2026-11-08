@@ -157,7 +157,8 @@ messagesRouter.post('/send', requireAuth, requireGuildAdmin, async (req: Request
           ep.last_name as "lastName",
           s.name as "sessionName",
           s.day_of_week as "dayOfWeek",
-          s.time_slot as "timeSlot"
+          s.start_time as "startTime",
+          s.end_time as "endTime"
         FROM event_participants ep
         LEFT JOIN event_sessions s ON ep.session_id = s.id
         WHERE ep.guild_id = ? AND ep.event_id = ? AND ep.status = 'registered'
@@ -173,13 +174,15 @@ messagesRouter.post('/send', requireAuth, requireGuildAdmin, async (req: Request
 
       const rows = (await db.prepare(query).all(...params)) as any[];
       for (const r of rows) {
+        const timeDetail = r.startTime ? (r.endTime ? `${r.startTime} - ${r.endTime}` : r.startTime) : '';
+        const sessionTime = r.dayOfWeek && timeDetail ? `${r.dayOfWeek} à ${timeDetail}` : (timeDetail || r.dayOfWeek || '');
         recipients.push({
           userId: r.userId,
           firstName: r.firstName,
           lastName: r.lastName,
           eventTitle: event.title,
           sessionName: r.sessionName || 'Session principale',
-          sessionTime: r.dayOfWeek && r.timeSlot ? `${r.dayOfWeek} à ${r.timeSlot}` : (r.timeSlot || ''),
+          sessionTime,
           location: event.location
         });
       }
@@ -340,7 +343,8 @@ messagesRouter.post('/events/:eventId/reminder', requireAuth, requireGuildAdmin,
         ep.last_name as "lastName",
         s.name as "sessionName",
         s.day_of_week as "dayOfWeek",
-        s.time_slot as "timeSlot"
+        s.start_time as "startTime",
+        s.end_time as "endTime"
       FROM event_participants ep
       LEFT JOIN event_sessions s ON ep.session_id = s.id
       WHERE ep.guild_id = ? AND ep.event_id = ? AND ep.status = 'registered'
@@ -373,8 +377,9 @@ messagesRouter.post('/events/:eventId/reminder', requireAuth, requireGuildAdmin,
           continue;
         }
 
+        const timeDetail = p.startTime ? (p.endTime ? `${p.startTime} - ${p.endTime}` : p.startTime) : '';
         const sessionDetail = p.sessionName
-          ? `${p.sessionName}${p.dayOfWeek && p.timeSlot ? ` — ${p.dayOfWeek} à ${p.timeSlot}` : ''}`
+          ? `${p.sessionName}${p.dayOfWeek && timeDetail ? ` — ${p.dayOfWeek} à ${timeDetail}` : (timeDetail ? ` — ${timeDetail}` : '')}`
           : (event.scheduled_start_time ? new Date(event.scheduled_start_time).toLocaleString('fr-FR', { dateStyle: 'full', timeStyle: 'short' }) : 'Horaire convenu');
 
         const body = customMessage
