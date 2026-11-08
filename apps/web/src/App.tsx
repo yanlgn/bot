@@ -20,6 +20,7 @@ import { AuditLogsPage } from './pages/AuditLogsPage';
 import { DepartmentsPage } from './pages/DepartmentsPage';
 import { CandidaturesPage } from './pages/CandidaturesPage';
 import { SuggestionsPage } from './pages/SuggestionsPage';
+import { DirectMessagesPage } from './pages/DirectMessagesPage';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -43,6 +44,7 @@ export const App: React.FC = () => {
               <Route index element={<Overview />} />
               <Route path="departments" element={<DepartmentsPage />} />
               <Route path="candidatures" element={<CandidaturesPage />} />
+              <Route path="messages" element={<DirectMessagesPage />} />
               <Route path="suggestions" element={<SuggestionsPage />} />
               <Route path="roles" element={<RolesPage />} />
               <Route path="channels" element={<ChannelsPage />} />

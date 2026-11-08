@@ -15,6 +15,7 @@ import { configRouter } from './config.routes.js';
 import { departmentsRouter } from './departments.routes.js';
 import { suggestionsRouter } from './suggestions.routes.js';
 import { candidaturesRouter } from './candidatures.routes.js';
+import { messagesRouter } from './messages.routes.js';
 
 export const apiRouter = Router();
 
@@ -25,6 +26,7 @@ apiRouter.use('/guilds', guildsRouter);
 // Routes rattachées à une guilde spécifique
 apiRouter.use('/guilds/:guildId/departments', departmentsRouter);
 apiRouter.use('/guilds/:guildId/candidatures', candidaturesRouter);
+apiRouter.use('/guilds/:guildId/messages', messagesRouter);
 apiRouter.use('/guilds/:guildId/suggestions', suggestionsRouter);
 apiRouter.use('/guilds/:guildId/roles', rolesRouter);
 apiRouter.use('/guilds/:guildId/channels', channelsRouter);

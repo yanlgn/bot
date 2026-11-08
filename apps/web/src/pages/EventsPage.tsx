@@ -23,7 +23,8 @@ import {
   Layers,
   Lock,
   Unlock,
-  ExternalLink
+  ExternalLink,
+  Bell
 } from 'lucide-react';
 import { Badge } from '../components/common/Badge';
 import { Modal } from '../components/common/Modal';
@@ -93,6 +94,13 @@ export const EventsPage: React.FC = () => {
   const [selectedEventForDeploy, setSelectedEventForDeploy] = useState<EventRecord | null>(null);
   const [deployChannelId, setDeployChannelId] = useState('');
   const [deployFeedback, setDeployFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+
+  // Rappel DM modal states
+  const [isReminderOpen, setIsReminderOpen] = useState(false);
+  const [reminderEventId, setReminderEventId] = useState<string>('');
+  const [reminderSessionId, setReminderSessionId] = useState<string>('all');
+  const [reminderMessage, setReminderMessage] = useState<string>('');
+  const [reminderFeedback, setReminderFeedback] = useState<{ sent: number; failed: number } | null>(null);
 
   // Form states
   const [title, setTitle] = useState('');
@@ -195,6 +203,31 @@ export const EventsPage: React.FC = () => {
       setDeployFeedback({ type: 'error', message: err.message || 'Erreur lors de l\'envoi sur Discord.' });
     }
   });
+
+  // Automated Reminder Mutation
+  const reminderMutation = useMutation({
+    mutationFn: ({ eventId, sessionId, customMessage }: { eventId: string; sessionId: string; customMessage: string }) =>
+      apiFetch(`/guilds/${guildId}/messages/events/${eventId}/reminder`, {
+        method: 'POST',
+        body: JSON.stringify({ sessionId, customMessage })
+      }),
+    onSuccess: (data: any) => {
+      setReminderFeedback({ sent: data.sentCount, failed: data.failedCount });
+      queryClient.invalidateQueries({ queryKey: ['events', guildId] });
+    }
+  });
+
+  const handleOpenReminder = (event?: EventRecord) => {
+    const targetEvent = event || (events.length > 0 ? events[0] : null);
+    if (!targetEvent) return;
+    setReminderEventId(targetEvent.id);
+    setReminderSessionId('all');
+    setReminderFeedback(null);
+    setReminderMessage(
+      `Bonjour {prenom},\n\nCeci est un rappel amical concernant votre inscription à l'événement **${targetEvent.title}** !\n\n📅 **Session / Horaire :** {session}\n📍 **Lieu :** ${targetEvent.location || 'En ligne'}\n\n💡 *Si vous avez un empêchement de dernière minute, merci de libérer votre place dans le salon Discord afin de permettre à d'autres membres de participer !*`
+    );
+    setIsReminderOpen(true);
+  };
 
   const resetForm = () => {
     setTitle('');
@@ -393,16 +426,26 @@ export const EventsPage: React.FC = () => {
           </p>
         </div>
 
-        <button
-          onClick={() => {
-            resetForm();
-            setIsCreateOpen(true);
-          }}
-          className="flex items-center px-5 py-2.5 bg-[#E5092E] hover:bg-[#c00725] text-white text-sm font-bold rounded-xl transition shadow-lg shadow-[#E5092E]/25 self-start sm:self-auto"
-        >
-          <Plus className="w-4 h-4 mr-2" />
-          Nouvel Événement
-        </button>
+        <div className="flex items-center gap-2.5 self-start sm:self-auto">
+          <button
+            onClick={() => handleOpenReminder()}
+            disabled={events.length === 0}
+            className="flex items-center px-4 py-2.5 bg-[#1E1E28] hover:bg-[#282838] border border-[#323246] hover:border-amber-500/50 text-amber-400 hover:text-white text-xs sm:text-sm font-bold rounded-xl transition shadow-md disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            <Bell className="w-4 h-4 mr-2 text-amber-400" />
+            Envoyer un rappel
+          </button>
+          <button
+            onClick={() => {
+              resetForm();
+              setIsCreateOpen(true);
+            }}
+            className="flex items-center px-4 sm:px-5 py-2.5 bg-[#E5092E] hover:bg-[#c00725] text-white text-xs sm:text-sm font-bold rounded-xl transition shadow-lg shadow-[#E5092E]/25"
+          >
+            <Plus className="w-4 h-4 mr-2" />
+            Nouvel Événement
+          </button>
+        </div>
       </div>
 
       {/* Events Grid */}
@@ -569,13 +612,23 @@ export const EventsPage: React.FC = () => {
                     </Badge>
                   </div>
 
-                  <div className="grid grid-cols-2 gap-2 pt-1">
+                  <div className="grid grid-cols-3 gap-1.5 pt-1">
                     <button
                       onClick={() => setSelectedEventForParticipants(event)}
-                      className="py-1.5 px-2 bg-[#1A1A22] hover:bg-[#242430] border border-[#242430] text-gray-200 text-xs font-bold rounded-lg transition flex items-center justify-center space-x-1"
+                      className="py-1.5 px-1.5 bg-[#1A1A22] hover:bg-[#242430] border border-[#242430] text-gray-200 text-xs font-bold rounded-lg transition flex items-center justify-center space-x-1"
+                      title="Voir la liste des inscrits"
                     >
                       <Users className="w-3.5 h-3.5 text-blue-400" />
                       <span>Inscrits</span>
+                    </button>
+
+                    <button
+                      onClick={() => handleOpenReminder(event)}
+                      className="py-1.5 px-1.5 bg-[#1A1A22] hover:bg-[#242430] border border-[#242430] hover:border-amber-500/40 text-amber-400 text-xs font-bold rounded-lg transition flex items-center justify-center space-x-1"
+                      title="Envoyer un rappel par message privé aux participants"
+                    >
+                      <Bell className="w-3.5 h-3.5" />
+                      <span>Rappel</span>
                     </button>
 
                     <button
@@ -584,11 +637,11 @@ export const EventsPage: React.FC = () => {
                         setDeployChannelId(event.channelId || '');
                         setDeployFeedback(null);
                       }}
-                      className="py-1.5 px-2 bg-[#1E1E28] hover:bg-[#2A2A3A] border border-[#323246] text-white text-xs font-bold rounded-lg transition flex items-center justify-center space-x-1"
+                      className="py-1.5 px-1.5 bg-[#1E1E28] hover:bg-[#2A2A3A] border border-[#323246] text-white text-xs font-bold rounded-lg transition flex items-center justify-center space-x-1"
                       title="Poster ou rafraîchir sur Discord"
                     >
                       <Send className="w-3.5 h-3.5 text-[#E5092E]" />
-                      <span>Diffuser Discord</span>
+                      <span>Discord</span>
                     </button>
                   </div>
                 </div>
@@ -1153,6 +1206,121 @@ export const EventsPage: React.FC = () => {
               </button>
             </div>
           </form>
+        </Modal>
+      )}
+
+      {/* Modal Rappel Automatique par DM */}
+      {isReminderOpen && (
+        <Modal
+          isOpen={true}
+          onClose={() => setIsReminderOpen(false)}
+          title="🔔 Envoyer un Rappel par Message Privé (DM)"
+        >
+          <div className="space-y-4">
+            {reminderFeedback && (
+              <div className="p-3 bg-emerald-500/10 border border-emerald-500/20 rounded-xl text-xs text-emerald-400 flex items-center justify-between">
+                <span className="flex items-center gap-2">
+                  <CheckCircle2 className="w-4 h-4 shrink-0" />
+                  Rappels envoyés avec succès : {reminderFeedback.sent} participant(s).
+                  {reminderFeedback.failed > 0 && ` (${reminderFeedback.failed} échec(s) car DMs fermés)`}
+                </span>
+                <button onClick={() => setReminderFeedback(null)} className="text-gray-400 hover:text-white">✕</button>
+              </div>
+            )}
+
+            <div>
+              <label className="block text-xs font-semibold text-gray-300 uppercase tracking-wider mb-1.5">
+                Sélectionner l'événement :
+              </label>
+              <select
+                value={reminderEventId}
+                onChange={e => {
+                  setReminderEventId(e.target.value);
+                  setReminderSessionId('all');
+                  const ev = events.find(item => item.id === e.target.value);
+                  if (ev) {
+                    setReminderMessage(
+                      `Bonjour {prenom},\n\nCeci est un rappel amical concernant votre inscription à l'événement **${ev.title}** !\n\n📅 **Session / Horaire :** {session}\n📍 **Lieu :** ${ev.location || 'En ligne'}\n\n💡 *Si vous avez un empêchement de dernière minute, merci de libérer votre place dans le salon Discord afin de permettre à d'autres membres de participer !*`
+                    );
+                  }
+                }}
+                className="w-full bg-[#1A1A22] border border-[#2E2E3C] rounded-xl px-4 py-2.5 text-sm text-gray-100 focus:outline-none focus:border-[#E5092E] transition"
+              >
+                {events.map(ev => (
+                  <option key={ev.id} value={ev.id}>
+                    {ev.title} ({ev.participantCount || 0} inscrit(s))
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {(() => {
+              const currentRemEvent = events.find(e => e.id === reminderEventId);
+              if (currentRemEvent && currentRemEvent.sessions && currentRemEvent.sessions.length > 0) {
+                return (
+                  <div>
+                    <label className="block text-xs font-semibold text-gray-300 uppercase tracking-wider mb-1.5">
+                      Session concernée :
+                    </label>
+                    <select
+                      value={reminderSessionId}
+                      onChange={e => setReminderSessionId(e.target.value)}
+                      className="w-full bg-[#1A1A22] border border-[#2E2E3C] rounded-xl px-4 py-2 text-xs text-gray-100 focus:outline-none focus:border-[#E5092E]"
+                    >
+                      <option value="all">Toutes les sessions de l'événement</option>
+                      {currentRemEvent.sessions.map((s: any) => (
+                        <option key={s.id} value={s.id}>
+                          {s.name} {s.dayOfWeek ? `(${s.dayOfWeek} à ${s.timeSlot || s.startTime})` : ''}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                );
+              }
+              return null;
+            })()}
+
+            <div>
+              <label className="block text-xs font-semibold text-gray-300 uppercase tracking-wider mb-1.5">
+                Message personnalisé envoyé par MP :
+              </label>
+              <textarea
+                value={reminderMessage}
+                onChange={e => setReminderMessage(e.target.value)}
+                rows={5}
+                className="w-full bg-[#1A1A22] border border-[#2E2E3C] rounded-xl p-3 text-xs text-gray-100 focus:outline-none focus:border-[#E5092E] leading-relaxed font-sans"
+              />
+              <span className="text-[11px] text-gray-400 mt-1 block">
+                Variables auto-remplacées : <code className="text-[#E5092E]">{"{prenom}"}</code>, <code className="text-[#E5092E]">{"{evenement}"}</code>, <code className="text-[#E5092E]">{"{session}"}</code>, <code className="text-[#E5092E]">{"{lieu}"}</code>.
+              </span>
+            </div>
+
+            <div className="flex justify-end space-x-3 pt-3">
+              <button
+                type="button"
+                onClick={() => setIsReminderOpen(false)}
+                className="px-4 py-2 bg-gray-800 hover:bg-gray-700 text-gray-300 text-xs font-semibold rounded-xl transition"
+              >
+                Fermer
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  if (!reminderEventId) return;
+                  reminderMutation.mutate({
+                    eventId: reminderEventId,
+                    sessionId: reminderSessionId,
+                    customMessage: reminderMessage
+                  });
+                }}
+                disabled={reminderMutation.isPending || !reminderEventId}
+                className="px-5 py-2.5 bg-[#E5092E] hover:bg-[#c00725] disabled:opacity-50 text-white text-xs font-bold rounded-xl transition shadow-md shadow-[#E5092E]/25 flex items-center gap-2"
+              >
+                <Bell className="w-3.5 h-3.5" />
+                {reminderMutation.isPending ? 'Envoi des rappels...' : 'Diffuser le rappel en DM'}
+              </button>
+            </div>
+          </div>
         </Modal>
       )}
     </div>

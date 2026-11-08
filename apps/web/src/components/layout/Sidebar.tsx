@@ -14,7 +14,8 @@ import {
   BookOpen,
   AlertOctagon,
   FileCode,
-  ScrollText
+  ScrollText,
+  Send
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 
@@ -26,6 +27,7 @@ export const Sidebar: React.FC = () => {
     { label: 'Vue d\'ensemble', path: `/dashboard/${guildId}`, icon: LayoutDashboard },
     { label: 'Pôles Scientifiques', path: `/dashboard/${guildId}/departments`, icon: Layers },
     { label: 'Candidatures Club', path: `/dashboard/${guildId}/candidatures`, icon: UserPlus },
+    { label: 'Messagerie & DMs', path: `/dashboard/${guildId}/messages`, icon: Send },
     { label: 'Espace Suggestions', path: `/dashboard/${guildId}/suggestions`, icon: Lightbulb },
     { label: 'Rôles Discord', path: `/dashboard/${guildId}/roles`, icon: Shield },
     { label: 'Salons & Pôles', path: `/dashboard/${guildId}/channels`, icon: Hash },
