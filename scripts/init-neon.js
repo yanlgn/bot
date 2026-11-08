@@ -367,6 +367,21 @@ const schema = `
     created_by TEXT NOT NULL,
     created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
   );
+
+  CREATE TABLE IF NOT EXISTS dm_campaigns (
+    id TEXT PRIMARY KEY,
+    guild_id TEXT NOT NULL,
+    sender_id TEXT NOT NULL,
+    sender_name TEXT NOT NULL,
+    target_type TEXT NOT NULL,
+    target_name TEXT,
+    title TEXT NOT NULL,
+    message TEXT NOT NULL,
+    total_targets INTEGER DEFAULT 0,
+    sent_count INTEGER DEFAULT 0,
+    failed_count INTEGER DEFAULT 0,
+    created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+  );
 `;
 
 async function main() {

@@ -291,7 +291,21 @@ export async function handleDepartmentStaffReview(interaction: ButtonInteraction
 
   if (!deptId || !candidateUserId) return;
 
-  const dept = (await db.prepare('SELECT * FROM departments WHERE id = ? AND guild_id = ?').get(deptId, interaction.guild.id)) as any;
+  let dept = (await db.prepare('SELECT * FROM departments WHERE id = ? AND guild_id = ?').get(deptId, interaction.guild.id)) as any;
+  if (!dept) {
+    // Fallback 1 : extraction depuis le footer de l'embed
+    const footerText = interaction.message.embeds[0]?.footer?.text || '';
+    const footerDeptMatch = footerText.match(/Pôle:\s*([a-zA-Z0-9_-]+)/);
+    if (footerDeptMatch && footerDeptMatch[1]) {
+      dept = (await db.prepare('SELECT * FROM departments WHERE id = ? AND guild_id = ?').get(footerDeptMatch[1], interaction.guild.id)) as any;
+    }
+  }
+  if (!dept) {
+    // Fallback 2 : recherche par nom de pôle présent dans le titre de l'embed
+    const embedTitle = interaction.message.embeds[0]?.title || '';
+    const allDepts = (await db.prepare('SELECT * FROM departments WHERE guild_id = ?').all(interaction.guild.id)) as any[];
+    dept = allDepts.find((d: any) => embedTitle.includes(d.name) || (d.short_name && embedTitle.includes(d.short_name)));
+  }
   if (!dept) {
     await interaction.reply({ content: '❌ Pôle introuvable.', ephemeral: true });
     return;
